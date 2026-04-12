@@ -5,18 +5,22 @@ on:
     types: [published]
   workflow_dispatch:
 
+env:
+  # Optional: opt into Node.js 24 now to avoid Node.js 20 deprecation warnings
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   build-and-publish:
     runs-on: ubuntu-latest
 
     steps:
       - name: Check out code
-        uses: actions/setup-python@v4
+        uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Install build dependencies
         run: |
