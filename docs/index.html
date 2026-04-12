@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ClearFrame — Open-Source AI Agent Protocol</title>
+<meta name="description" content="ClearFrame is the open-source AI agent protocol built for auditability, safety, and control. A better alternative to OpenClaw and MCP.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0d0d0b;
+  --surface: #131311;
+  --surface-2: #1a1916;
+  --border: rgba(255,255,255,0.08);
+  --text: #e8e6e1;
+  --text-muted: #7a7870;
+  --text-faint: #3d3c39;
+  --primary: #4f98a3;
+  --primary-hover: #62b3bf;
+  --success: #6daa45;
+  --warning: #e8af34;
+  --error: #dd6974;
+  --font-body: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+  --space-24: 6rem;
+  --shadow-lg: 0 12px 40px rgba(0,0,0,0.5);
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; scroll-padding-top: 80px; }
+body {
+  font-family: var(--font-body);
+  font-size: 1rem;
+  line-height: 1.65;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--primary); text-decoration: none; }
+a:hover { color: var(--primary-hover); }
+img { display: block; max-width: 100%; }
+p { max-width: 68ch; }
+code, kbd {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.1em 0.4em;
+}
+pre {
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-6);
+  overflow-x: auto;
+  line-height: 1.6;
+  position: relative;
+}
+pre code { background: none; border: none; padding: 0; font-size: inherit; }
+.container { max-width: 1100px; margin: 0 auto; padding: 0 var(--space-6); }
+.container-narrow { max-width: 740px; margin: 0 auto; padding: 0 var(--space-6); }
+
+/* NAV */
+nav {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(13,13,11,0.85);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border);
+  padding: var(--space-4) 0;
+}
+.nav-inner {
+  display: flex; align-items: center; justify-content: space-between;
+  max-width: 1100px; margin: 0 auto; padding: 0 var(--space-6);
+}
+.nav-logo {
+  display: flex; align-items: center; gap: var(--space-3);
+  font-weight: 600; font-size: 1.1rem; color: var(--text);
+}
+.nav-links { display: flex; gap: var(--space-6); align-items: center; }
+.nav-links a { color: var(--text-muted); font-size: 0.9rem; transition: color 150ms; }
+.nav-links a:hover { color: var(--text); }
+.btn-nav {
+  background: var(--primary);
+  color: #0d0d0b;
+  padding: 0.45rem 1.1rem;
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: background 150ms;
+}
+.btn-nav:hover { background: var(--primary-hover); color: #0d0d0b; }
+
+/* HERO */
+.hero {
+  padding: var(--space-24) 0 var(--space-16);
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+  position: relative;
+  overflow: hidden;
+}
+.hero::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: radial-gradient(ellipse 60% 40% at 50% 0%, rgba(79,152,163,0.12) 0%, transparent 70%);
+  pointer-events: none;
+}
+.badge {
+  display: inline-flex; align-items: center; gap: var(--space-2);
+  background: rgba(79,152,163,0.12);
+  border: 1px solid rgba(79,152,163,0.3);
+  color: var(--primary);
+  border-radius: 99px;
+  padding: 0.3rem 0.9rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  margin-bottom: var(--space-6);
+}
+.badge-dot { width: 6px; height: 6px; background: var(--primary); border-radius: 50%; animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.4} }
+.hero h1 {
+  font-size: clamp(2.2rem, 5vw, 3.8rem);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  color: var(--text);
+  margin-bottom: var(--space-6);
+}
+.hero h1 span { color: var(--primary); }
+.hero p {
+  font-size: 1.15rem;
+  color: var(--text-muted);
+  margin: 0 auto var(--space-8);
+  max-width: 52ch;
+}
+.hero-actions { display: flex; gap: var(--space-4); justify-content: center; flex-wrap: wrap; }
+.btn-primary {
+  background: var(--primary);
+  color: #0a0a0a;
+  padding: 0.75rem 1.75rem;
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  font-size: 0.95rem;
+  transition: background 150ms, transform 100ms;
+  display: inline-flex; align-items: center; gap: var(--space-2);
+}
+.btn-primary:hover { background: var(--primary-hover); color: #0a0a0a; transform: translateY(-1px); }
+.btn-ghost {
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  padding: 0.75rem 1.75rem;
+  border-radius: var(--radius-md);
+  font-size: 0.95rem;
+  transition: border-color 150ms, color 150ms;
+}
+.btn-ghost:hover { border-color: var(--text-muted); color: var(--text); }
+
+/* STATS STRIP */
+.stats {
+  padding: var(--space-12) 0;
+  border-bottom: 1px solid var(--border);
+}
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--space-8);
+  text-align: center;
+}
+.stat-num { font-size: 2rem; font-weight: 700; color: var(--primary); letter-spacing: -0.02em; }
+.stat-label { font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem; }
+
+/* SECTION HEADINGS */
+.section { padding: var(--space-24) 0; border-bottom: 1px solid var(--border); }
+.section:last-child { border-bottom: none; }
+.section-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--primary);
+  margin-bottom: var(--space-4);
+}
+.section h2 {
+  font-size: clamp(1.6rem, 3vw, 2.4rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: var(--space-4);
+  line-height: 1.2;
+}
+.section .lead {
+  font-size: 1.05rem;
+  color: var(--text-muted);
+  margin-bottom: var(--space-12);
+  max-width: 60ch;
+}
+
+/* PROBLEM SECTION */
+.problem-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--space-4);
+}
+.problem-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+}
+.problem-card h3 { font-size: 0.95rem; font-weight: 600; margin-bottom: var(--space-2); color: var(--error); }
+.problem-card p { font-size: 0.9rem; color: var(--text-muted); }
+
+/* ARCHITECTURE */
+.arch-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-8);
+  align-items: start;
+}
+@media(max-width: 768px) { .arch-grid { grid-template-columns: 1fr; } }
+.arch-diagram {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  line-height: 2;
+  color: var(--text-muted);
+  white-space: pre;
+  overflow-x: auto;
+}
+.arch-diagram .highlight { color: var(--primary); font-weight: 500; }
+.arch-diagram .ok { color: var(--success); }
+.arch-diagram .warn { color: var(--warning); }
+.arch-diagram .err { color: var(--error); }
+.feature-list { display: flex; flex-direction: column; gap: var(--space-4); }
+.feature-item {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4) var(--space-6);
+  display: flex;
+  gap: var(--space-4);
+  align-items: flex-start;
+}
+.feature-icon {
+  width: 36px; height: 36px;
+  background: rgba(79,152,163,0.12);
+  border-radius: var(--radius-md);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  font-size: 1rem;
+}
+.feature-item h3 { font-size: 0.95rem; font-weight: 600; margin-bottom: 0.2rem; }
+.feature-item p { font-size: 0.875rem; color: var(--text-muted); }
+
+/* COMPARISON TABLE */
+.compare-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+.compare-table th {
+  text-align: left;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 2px solid var(--border);
+  color: var(--text-muted);
+  font-weight: 500;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.compare-table td {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.compare-table tr:last-child td { border-bottom: none; }
+.compare-table td:first-child { color: var(--text); font-weight: 500; }
+.yes { color: var(--success); font-weight: 600; }
+.no { color: var(--error); }
+.partial { color: var(--warning); }
+
+/* QUICKSTART */
+.steps { display: flex; flex-direction: column; gap: var(--space-6); }
+.step {
+  display: grid;
+  grid-template-columns: 40px 1fr;
+  gap: var(--space-4);
+  align-items: start;
+}
+.step-num {
+  width: 40px; height: 40px;
+  background: rgba(79,152,163,0.12);
+  border: 1px solid rgba(79,152,163,0.3);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.85rem; font-weight: 700;
+  color: var(--primary);
+  flex-shrink: 0;
+}
+.step h3 { font-size: 0.95rem; font-weight: 600; margin-bottom: var(--space-2); }
+.step p { font-size: 0.875rem; color: var(--text-muted); margin-bottom: var(--space-3); }
+.copy-btn {
+  position: absolute;
+  top: var(--space-3); right: var(--space-3);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  padding: 0.25rem 0.6rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  font-family: var(--font-body);
+  transition: color 150ms, border-color 150ms;
+}
+.copy-btn:hover { color: var(--text); border-color: var(--text-muted); }
+
+/* FOOTER */
+footer {
+  padding: var(--space-16) 0 var(--space-12);
+  border-top: 1px solid var(--border);
+}
+.footer-inner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+.footer-left { color: var(--text-muted); font-size: 0.875rem; }
+.footer-links { display: flex; gap: var(--space-6); }
+.footer-links a { font-size: 0.875rem; color: var(--text-muted); }
+.footer-links a:hover { color: var(--text); }
+
+/* MOBILE */
+@media(max-width: 640px) {
+  .nav-links { display: none; }
+  .hero { padding: var(--space-16) 0 var(--space-12); }
+  .stats-grid { grid-template-columns: 1fr 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-inner">
+    <a href="#" class="nav-logo">
+      <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-label="ClearFrame logo">
+        <rect x="2" y="2" width="24" height="24" rx="5" stroke="#4f98a3" stroke-width="1.5"/>
+        <rect x="7" y="7" width="14" height="14" rx="2" fill="rgba(79,152,163,0.15)" stroke="#4f98a3" stroke-width="1.2"/>
+        <circle cx="14" cy="14" r="3" fill="#4f98a3"/>
+        <line x1="14" y1="2" x2="14" y2="7" stroke="#4f98a3" stroke-width="1.5"/>
+        <line x1="14" y1="21" x2="14" y2="26" stroke="#4f98a3" stroke-width="1.5"/>
+        <line x1="2" y1="14" x2="7" y2="14" stroke="#4f98a3" stroke-width="1.5"/>
+        <line x1="21" y1="14" x2="26" y2="14" stroke="#4f98a3" stroke-width="1.5"/>
+      </svg>
+      ClearFrame
+    </a>
+    <div class="nav-links">
+      <a href="#why">Why ClearFrame</a>
+      <a href="#architecture">Architecture</a>
+      <a href="#compare">vs OpenClaw</a>
+      <a href="#quickstart">Quickstart</a>
+      <a href="https://github.com/ibrahimmukherjee-boop/ClearFrame" target="_blank" rel="noopener" class="btn-nav">GitHub</a>
+    </div>
+  </div>
+</nav>
+
+<!-- HERO -->
+<header class="hero">
+  <div class="container-narrow">
+    <div class="badge"><span class="badge-dot"></span> Open Source · Apache 2.0 · v0.1.0</div>
+    <h1>AI agents that run inside a<br><span>glass box, not a black box.</span></h1>
+    <p>ClearFrame is the open-source AI agent protocol built for full auditability, goal alignment monitoring, and operator control. Every reasoning step logged. Every tool call scored. Every credential encrypted.</p>
+    <div class="hero-actions">
+      <a href="#quickstart" class="btn-primary">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        Get started in 60 seconds
+      </a>
+      <a href="https://github.com/ibrahimmukherjee-boop/ClearFrame" target="_blank" rel="noopener" class="btn-ghost">View on GitHub →</a>
+    </div>
+  </div>
+</header>
+
+<!-- STATS -->
+<section class="stats">
+  <div class="container">
+    <div class="stats-grid">
+      <div><div class="stat-num">5</div><div class="stat-label">Security layers OpenClaw lacks</div></div>
+      <div><div class="stat-num">100%</div><div class="stat-label">Reasoning steps captured</div></div>
+      <div><div class="stat-num">0</div><div class="stat-label">Plaintext credentials stored</div></div>
+      <div><div class="stat-num">Live</div><div class="stat-label">AgentOps control plane</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- WHY -->
+<section class="section" id="why">
+  <div class="container">
+    <div class="section-label">The problem</div>
+    <h2>OpenClaw and MCP have the same structural flaw.</h2>
+    <p class="lead">A single unsandboxed process reads untrusted content, feeds it into the model, and executes whatever the model produces. There is no audit trail, no goal concept, and no operator visibility.</p>
+    <div class="problem-grid">
+      <div class="problem-card">
+        <h3>No Reader/Actor isolation</h3>
+        <p>The same process that fetches a malicious webpage can execute shell commands. Indirect prompt injection is architecturally unavoidable.</p>
+      </div>
+      <div class="problem-card">
+        <h3>Plaintext credential storage</h3>
+        <p>API keys sit in <code>~/.env</code> files readable by every installed plugin. One compromised skill → all credentials exposed.</p>
+      </div>
+      <div class="problem-card">
+        <h3>No audit trail</h3>
+        <p>Tool executions are never logged with tamper-evident records. Post-incident forensics is impossible — you cannot reconstruct what happened.</p>
+      </div>
+      <div class="problem-card">
+        <h3>No goal concept</h3>
+        <p>The runtime has no idea what the agent was supposed to do. Goal drift and out-of-scope actions go completely undetected.</p>
+      </div>
+      <div class="problem-card">
+        <h3>No reasoning transparency</h3>
+        <p>Chain-of-thought is never captured. You cannot inspect why an agent made a decision or replay a session for debugging.</p>
+      </div>
+      <div class="problem-card">
+        <h3>No supply-chain trust</h3>
+        <p>Any GitHub account can publish a plugin with zero review, zero signing, zero verification. One malicious plugin infects every user.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ARCHITECTURE -->
+<section class="section" id="architecture">
+  <div class="container">
+    <div class="section-label">Architecture</div>
+    <h2>Five layers OpenClaw simply doesn't have.</h2>
+    <p class="lead">ClearFrame is not a patched version of an existing protocol. It is a ground-up redesign around auditability, isolation, and operator control.</p>
+    <div class="arch-grid">
+      <div>
+        <div class="arch-diagram">
+<span class="highlight">┌─ ClearFrame Session ──────────────────┐</span>
+│                                       │
+│  <span class="highlight">GoalManifest</span>  (declared intent)       │
+│    goal: "Find AI safety papers"      │
+│    permitted_tools: [web_search]      │
+│    allow_file_write: false            │
+│                                       │
+│  <span class="ok">READER sandbox</span>  ←── untrusted input  │
+│    fetches content, hashes chunks     │
+│    CANNOT execute tools               │
+│         │ typed pipe                  │
+│         ▼                             │
+│  <span class="highlight">Goal Monitor</span>   alignment scoring    │
+│    score: 0.91 → <span class="ok">AUTO_APPROVE</span>       │
+│    score: 0.42 → <span class="warn">QUEUE (operator)</span>   │
+│    score: 0.10 → <span class="err">BLOCK</span>              │
+│         │ approved only               │
+│         ▼                             │
+│  <span class="ok">ACTOR sandbox</span>   ←── tool execution  │
+│    NEVER reads untrusted content      │
+│                                       │
+│  <span class="highlight">RTL</span>  full reasoning trace (JSONL)    │
+│  <span class="highlight">Audit</span>  HMAC-chained tamper-evident   │
+│  <span class="highlight">Vault</span>  AES-256-GCM credentials       │
+└───────────────────────────────────────┘</div>
+      </div>
+      <div class="feature-list">
+        <div class="feature-item">
+          <div class="feature-icon">🔒</div>
+          <div>
+            <h3>Reader / Actor Isolation</h3>
+            <p>Untrusted content ingestion and tool execution are separate sandboxed processes. Indirect prompt injection is eliminated by design.</p>
+          </div>
+        </div>
+        <div class="feature-item">
+          <div class="feature-icon">🎯</div>
+          <div>
+            <h3>Goal Monitor</h3>
+            <p>Agents declare their goal at session start. Every tool call is scored for alignment. Drift triggers auto-pause. Operators approve ambiguous calls via dashboard.</p>
+          </div>
+        </div>
+        <div class="feature-item">
+          <div class="feature-icon">🔍</div>
+          <div>
+            <h3>Reasoning Transparency Layer (RTL)</h3>
+            <p>Every chain-of-thought step is captured as structured, queryable JSON with SHA-256 content hashes. Full session replay available.</p>
+          </div>
+        </div>
+        <div class="feature-item">
+          <div class="feature-icon">📋</div>
+          <div>
+            <h3>HMAC-Chained Audit Log</h3>
+            <p>Every event is cryptographically chained to the previous. Tampering is detectable via <code>clearframe audit-verify</code>. Full forensic reconstruction possible.</p>
+          </div>
+        </div>
+        <div class="feature-item">
+          <div class="feature-icon">🖥️</div>
+          <div>
+            <h3>AgentOps Control Plane</h3>
+            <p>Live REST + WebSocket dashboard. See alignment scores, inspect reasoning traces, approve/block queued calls, and verify audit integrity — all in real time.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- COMPARE -->
+<section class="section" id="compare">
+  <div class="container">
+    <div class="section-label">Comparison</div>
+    <h2>ClearFrame vs OpenClaw vs MCP</h2>
+    <p class="lead">A direct feature comparison across the capabilities that matter for production AI agent deployments.</p>
+    <div style="overflow-x:auto; border: 1px solid var(--border); border-radius: var(--radius-lg);">
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>Capability</th>
+            <th>ClearFrame</th>
+            <th>OpenClaw</th>
+            <th>MCP</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Reader/Actor process isolation</td><td class="yes">✓ Yes</td><td class="no">✗ No</td><td class="no">✗ No</td></tr>
+          <tr><td>Goal alignment scoring</td><td class="yes">✓ Every call</td><td class="no">✗ None</td><td class="no">✗ None</td></tr>
+          <tr><td>Agent goal drift detection</td><td class="yes">✓ Auto-pause</td><td class="no">✗ None</td><td class="no">✗ None</td></tr>
+          <tr><td>Operator approval queue</td><td class="yes">✓ Built-in</td><td class="no">✗ None</td><td class="partial">△ Manual</td></tr>
+          <tr><td>Full reasoning trace (RTL)</td><td class="yes">✓ Structured JSON</td><td class="no">✗ None</td><td class="no">✗ None</td></tr>
+          <tr><td>Tamper-evident audit log</td><td class="yes">✓ HMAC-chained</td><td class="no">✗ None</td><td class="no">✗ None</td></tr>
+          <tr><td>Encrypted credential vault</td><td class="yes">✓ AES-256-GCM</td><td class="no">✗ Plaintext .env</td><td class="partial">△ Varies</td></tr>
+          <tr><td>Context feed hashing</td><td class="yes">✓ SHA-256 per chunk</td><td class="no">✗ None</td><td class="no">✗ None</td></tr>
+          <tr><td>Live AgentOps dashboard</td><td class="yes">✓ REST + WebSocket</td><td class="no">✗ None</td><td class="no">✗ None</td></tr>
+          <tr><td>Auth required by default</td><td class="yes">✓ Yes</td><td class="no">✗ Open by default</td><td class="partial">△ Optional</td></tr>
+          <tr><td>Localhost-only binding default</td><td class="yes">✓ Yes</td><td class="no">✗ All interfaces</td><td class="partial">△ Varies</td></tr>
+          <tr><td>Open source license</td><td class="yes">✓ Apache 2.0</td><td class="yes">✓ MIT</td><td class="yes">✓ MIT</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- QUICKSTART -->
+<section class="section" id="quickstart">
+  <div class="container-narrow">
+    <div class="section-label">Quickstart</div>
+    <h2>From zero to running agent in 60 seconds.</h2>
+    <p class="lead">ClearFrame is a standard Python package. Install it, declare your agent's goal, and run.</p>
+    <div class="steps">
+
+      <div class="step">
+        <div class="step-num">1</div>
+        <div>
+          <h3>Install ClearFrame</h3>
+          <p>Requires Python 3.11+. Install from PyPI or directly from the GitHub repo.</p>
+          <pre><button class="copy-btn" onclick="copyCode(this)">Copy</button><code># From PyPI (once published)
+pip install clearframe
+
+# Or install directly from GitHub right now
+pip install git+https://github.com/ibrahimmukherjee-boop/ClearFrame.git</code></pre>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">2</div>
+        <div>
+          <h3>Initialise a project</h3>
+          <p>The CLI scaffolds a project with the correct structure.</p>
+          <pre><button class="copy-btn" onclick="copyCode(this)">Copy</button><code>clearframe init my-agent
+cd my-agent</code></pre>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">3</div>
+        <div>
+          <h3>Declare your agent's goal</h3>
+          <p>Edit <code>agent.py</code>. Every tool call will be scored against this declared goal.</p>
+          <pre><button class="copy-btn" onclick="copyCode(this)">Copy</button><code>import asyncio
+from clearframe import AgentSession, GoalManifest, ClearFrameConfig
+from clearframe.core.manifest import ToolPermission
+
+async def main():
+    config = ClearFrameConfig()
+
+    manifest = GoalManifest(
+        goal="Search for the latest AI safety papers and summarise them",
+        permitted_tools=[
+            ToolPermission(tool_name="web_search", max_calls_per_session=5),
+        ],
+        allow_file_write=False,
+        allow_code_execution=False,
+    )
+
+    async with AgentSession(config, manifest) as session:
+        # Every tool call is scored for alignment before execution
+        result = await session.call_tool(
+            "web_search",
+            query="AI safety papers 2026"
+        )
+        print(result)
+
+if __name__ == "__main__":
+    asyncio.run(main())</code></pre>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">4</div>
+        <div>
+          <h3>Run your agent</h3>
+          <p>The AgentOps dashboard starts automatically at <code>localhost:7477</code>.</p>
+          <pre><button class="copy-btn" onclick="copyCode(this)">Copy</button><code>python agent.py
+
+# Verify audit log integrity at any time
+clearframe audit-verify
+
+# View recent audit events
+clearframe audit-tail --lines 20</code></pre>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="container">
+    <div class="footer-inner">
+      <div class="footer-left">
+        <strong style="color:var(--text)">ClearFrame</strong> — Apache 2.0 open-source project<br>
+        Built to be better than OpenClaw and MCP.
+      </div>
+      <div class="footer-links">
+        <a href="https://github.com/ibrahimmukherjee-boop/ClearFrame" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/ibrahimmukherjee-boop/ClearFrame/issues" target="_blank" rel="noopener">Issues</a>
+        <a href="https://github.com/ibrahimmukherjee-boop/ClearFrame/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Contribute</a>
+        <a href="https://github.com/ibrahimmukherjee-boop/ClearFrame/blob/main/LICENSE" target="_blank" rel="noopener">License</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script>
+function copyCode(btn) {
+  const code = btn.nextElementSibling.textContent;
+  navigator.clipboard.writeText(code).then(() => {
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy', 2000);
+  });
+}
+</script>
+</body>
+</html>
