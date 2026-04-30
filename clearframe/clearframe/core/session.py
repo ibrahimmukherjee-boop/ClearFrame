@@ -26,6 +26,7 @@ from clearframe.monitor.goal_monitor import GoalMonitor, Disposition
 from clearframe.monitor.rtl import RTL
 from clearframe.gateway.isolation import MessagePipe, ReaderSandbox, ActorSandbox
 
+__all__ = ["AgentSession", "SessionError"]
 
 class SessionError(Exception):
     pass
