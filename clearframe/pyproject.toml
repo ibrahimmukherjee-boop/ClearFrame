@@ -40,6 +40,10 @@ dev = [
     "mypy>=1.10",
     "httpx>=0.27",
 ]
+
+[project.optional-dependencies]
+ollama = []   # httpx already a core dep — no extra packages needed
+
 # Install the full Erasys trust stack:
 #   pip install clearframe[trust]
 # Requires a GitHub token or SSH key that can read the private TrustRegistry repo.
