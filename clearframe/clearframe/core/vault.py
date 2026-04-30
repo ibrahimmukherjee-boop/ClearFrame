@@ -29,6 +29,7 @@ from cryptography.hazmat.primitives import hashes
 
 from clearframe.core.config import VaultConfig
 
+__all__ = ["Vault", "VaultError"]
 
 class VaultError(Exception):
     pass
