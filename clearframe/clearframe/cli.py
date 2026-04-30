@@ -1,128 +1,169 @@
-"""ClearFrame CLI — clearframe init / audit-verify / audit-tail / ops-start / version"""
+"""
+ClearFrame CLI
+==============
+Main entry point for the `clearframe` command.
 
+Fix 1: Ops token is written to ~/.clearframe/ops-token (chmod 600).
+       It is never printed to the terminal.
+"""
 from __future__ import annotations
 
-import json
+import asyncio
 from pathlib import Path
 
 import typer
+import uvicorn
 from rich.console import Console
-from rich.table import Table
+from rich.table   import Table
 
-app = typer.Typer(
-    name="clearframe",
-    help="ClearFrame — AI agent protocol with auditability and safety controls.",
-    no_args_is_help=True,
-)
+app     = typer.Typer(name="clearframe", help="ClearFrame — secure agentic AI runtime", no_args_is_help=True)
 console = Console()
 
 
+# ── start ─────────────────────────────────────────────────────────────────────
+
 @app.command()
-def init(name: str = typer.Argument(..., help="Project name")) -> None:
-    """Initialise a new ClearFrame agent project."""
-    path = Path(name)
-    path.mkdir(exist_ok=True)
-    (path / "agent.py").write_text(
-        f'"""ClearFrame agent: {name}"""\n\n'
-        "import asyncio\n"
-        "from clearframe import AgentSession, GoalManifest, ClearFrameConfig\n"
-        "from clearframe.core.manifest import ToolPermission\n\n\n"
-        "async def main() -> None:\n"
-        "    config = ClearFrameConfig()\n"
-        "    manifest = GoalManifest(\n"
-        "        goal='Describe your agent goal here',\n"
-        "        permitted_tools=[ToolPermission(tool_name='web_search')],\n"
-        "    )\n"
-        "    async with AgentSession(config, manifest) as session:\n"
-        "        result = await session.call_tool('web_search', query='hello world')\n"
-        "        print(result)\n\n\n"
-        "if __name__ == '__main__':\n"
-        "    asyncio.run(main())\n"
-    )
-    (path / "clearframe.json").write_text(
-        json.dumps({"name": name, "version": "0.1.0"}, indent=2) + "\n"
-    )
-    console.print(f"[green]✓[/green] Initialised ClearFrame project: [bold]{name}[/bold]")
-    console.print(f"  Edit [cyan]{name}/agent.py[/cyan] to define your agent.")
-    console.print(f"  Run: [cyan]cd {name} && python agent.py[/cyan]")
+def start(
+    host: str = typer.Option("127.0.0.1", help="Bind address. Do NOT change to 0.0.0.0 in production."),
+    port: int = typer.Option(7477, help="Port for the AgentOps API."),
+) -> None:
+    """Start the ClearFrame AgentOps server."""
+    from clearframe.core.config import ClearFrameConfig, OpsConfig
+    from clearframe.ops.server  import create_ops_app
+
+    config          = ClearFrameConfig(ops=OpsConfig(host=host, port=port))
+    ops_app, token  = create_ops_app(config.ops)
+
+    # ── FIX 1: write token to disk — never echo to terminal ──────────────
+    token_path = Path.home() / ".clearframe" / "ops-token"
+    token_path.parent.mkdir(parents=True, exist_ok=True)
+    token_path.write_text(token)
+    token_path.chmod(0o600)
+    # ─────────────────────────────────────────────────────────────────────
+
+    console.print(f"\n[bold green]✓ ClearFrame AgentOps[/bold green] → http://{host}:{port}")
+    console.print(f"  [yellow]Auth token saved →[/yellow] [cyan]{token_path}[/cyan]")
+    console.print("  [dim]Load it:  export CF_OPS_TOKEN=$(cat ~/.clearframe/ops-token)[/dim]\n")
+    console.print("  [dim]Press Ctrl+C to stop.[/dim]\n")
+
+    uvicorn.run(ops_app, host=host, port=port, log_level="warning")
 
 
-@app.command(name="audit-verify")
+# ── audit-verify ──────────────────────────────────────────────────────────────
+
+@app.command("audit-verify")
 def audit_verify(
-    session_id: str = typer.Option(None, "--session", "-s", help="Filter by session ID"),
     log_path: Path = typer.Option(
-        Path.home() / ".clearframe" / "audit.log", "--log", help="Path to audit log"
+        Path("~/.clearframe/audit.log").expanduser(),
+        help="Path to the audit log file.",
     ),
 ) -> None:
-    """Verify HMAC chain integrity of the audit log."""
-    from clearframe.core.audit import AuditLog
+    """Verify the HMAC chain integrity of an audit log."""
+    from clearframe.core.audit  import AuditLog
     from clearframe.core.config import AuditConfig
 
-    cfg = AuditConfig(log_path=log_path)
-    audit = AuditLog(cfg)
-    ok, errors = audit.verify()
+    config     = AuditConfig(log_path=log_path)
+    audit      = AuditLog(config)
+    ok, errors = audit.verify_chain()
+
     if ok:
-        console.print("[green]✓ Audit log integrity verified — no tampering detected.[/green]")
+        console.print("[bold green]✓ Audit log chain is intact.[/bold green]")
     else:
-        console.print(f"[red]✗ TAMPERING DETECTED — {len(errors)} error(s):[/red]")
-        for err in errors:
-            console.print(f"  [red]{err}[/red]")
+        console.print(f"[bold red]✗ {len(errors)} chain error(s) found:[/bold red]")
+        for e in errors:
+            console.print(f"  [red]•[/red] {e}")
         raise typer.Exit(code=1)
 
 
-@app.command(name="audit-tail")
-def audit_tail(
-    n: int = typer.Option(20, "--lines", "-n", help="Number of entries to show"),
-    log_path: Path = typer.Option(
-        Path.home() / ".clearframe" / "audit.log", "--log", help="Path to audit log"
+# ── rtl-replay ────────────────────────────────────────────────────────────────
+
+@app.command("rtl-replay")
+def rtl_replay(
+    session_id: str = typer.Argument(..., help="Session ID to replay."),
+    rtl_dir: Path   = typer.Option(
+        Path("~/.clearframe/rtl").expanduser(),
+        help="Directory containing RTL trace files.",
     ),
 ) -> None:
-    """Show recent audit log entries."""
-    from clearframe.core.audit import AuditLog
-    from clearframe.core.config import AuditConfig
+    """Replay and verify the reasoning trace for a session."""
+    import hashlib
+    from clearframe.core.config import RTLConfig
+    from clearframe.monitor.rtl import RTL
 
-    cfg = AuditConfig(log_path=log_path)
-    audit = AuditLog(cfg)
-    entries = audit.tail(n)
-    if not entries:
-        console.print("[dim]No audit entries found.[/dim]")
+    config = RTLConfig(rtl_path=rtl_dir)
+    rtl    = RTL(session_id, config)
+    steps  = rtl.replay()
+    ok, errors = rtl.verify_hashes()
+
+    if not steps:
+        console.print(f"[yellow]No trace found for session {session_id}.[/yellow]")
         return
-    table = Table(title=f"Last {n} Audit Entries", show_lines=True)
-    table.add_column("Seq", style="dim", width=6)
-    table.add_column("Event", style="cyan")
-    table.add_column("Session", style="dim", width=14)
-    table.add_column("Timestamp", style="dim")
-    for e in entries:
-        table.add_row(
-            str(e.get("seq", "")),
-            e.get("event_type", ""),
-            str(e.get("session_id", ""))[:12] + "…",
-            str(e.get("timestamp", ""))[:19],
-        )
+
+    table = Table("Seq", "Type", "Hash OK", "Content Preview", show_header=True)
+    for step in steps:
+        expected = hashlib.sha256(step.content.encode()).hexdigest()
+        ok_flag  = "[green]✓[/green]" if step.content_hash == expected else "[red]✗[/red]"
+        table.add_row(str(step.seq), step.step_type, ok_flag, step.content[:72])
     console.print(table)
 
+    if not ok:
+        console.print(f"\n[bold red]✗ {len(errors)} hash mismatch(es):[/bold red]")
+        for e in errors:
+            console.print(f"  [red]•[/red] {e}")
+        raise typer.Exit(code=1)
+    else:
+        console.print(f"\n[green]✓ All {len(steps)} reasoning steps verified.[/green]")
 
-@app.command(name="ops-start")
-def ops_start(
-    host: str = typer.Option("127.0.0.1", "--host"),
-    port: int = typer.Option(7477, "--port"),
+
+# ── vault ─────────────────────────────────────────────────────────────────────
+
+vault_app = typer.Typer(help="Manage the ClearFrame credential vault.")
+app.add_typer(vault_app, name="vault")
+
+
+@vault_app.command("set")
+def vault_set(
+    name:       str  = typer.Argument(..., help="Credential name."),
+    passphrase: str  = typer.Option(..., prompt=True, hide_input=True, help="Vault passphrase."),
 ) -> None:
-    """Start the AgentOps control plane server."""
-    import uvicorn
-    from clearframe.core.config import OpsConfig
-    from clearframe.ops.server import create_ops_app, _ops_token
+    """Store a credential in the encrypted vault."""
+    import getpass
+    from clearframe.core.config import ClearFrameConfig
+    from clearframe.core.vault  import Vault
 
-    config = OpsConfig(host=host, port=port)
-    ops_app = create_ops_app(config)
-    console.print(f"[green]✓ ClearFrame AgentOps starting at http://{host}:{port}[/green]")
-    console.print(f"  [yellow]Auth token:[/yellow] {_ops_token}")
-    console.print("  [dim]Keep this token private — it grants full control.[/dim]")
-    uvicorn.run(ops_app, host=host, port=port)
+    value = getpass.getpass(f"Value for '{name}': ")
+    vault = Vault(ClearFrameConfig().vault)
+    vault.unlock(passphrase)
+    vault.set(name, value)
+    vault.lock()
+    console.print(f"[green]✓ Credential '{name}' saved.[/green]")
 
+
+@vault_app.command("list")
+def vault_list(
+    passphrase: str = typer.Option(..., prompt=True, hide_input=True),
+) -> None:
+    """List credential names stored in the vault."""
+    from clearframe.core.config import ClearFrameConfig
+    from clearframe.core.vault  import Vault
+
+    vault = Vault(ClearFrameConfig().vault)
+    vault.unlock(passphrase)
+    keys  = vault.list_keys()
+    vault.lock()
+
+    if not keys:
+        console.print("[yellow]Vault is empty.[/yellow]")
+    else:
+        for k in keys:
+            console.print(f"  [cyan]•[/cyan] {k}")
+
+
+# ── version ───────────────────────────────────────────────────────────────────
 
 @app.command()
 def version() -> None:
-    """Show ClearFrame version."""
+    """Print the ClearFrame version."""
     from clearframe import __version__
     console.print(f"ClearFrame v{__version__}")
 
