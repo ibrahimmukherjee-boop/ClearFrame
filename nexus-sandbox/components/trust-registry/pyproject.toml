@@ -1,0 +1,21 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "trust-registry"
+version = "0.1.0"
+description = "Nexus Protocol TrustRegistry — Ed25519 agent PKI"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.6",
+    "cryptography>=42.0",
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+]
+
+[project.scripts]
+trust-registry = "trust_registry.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["trust_registry"]
