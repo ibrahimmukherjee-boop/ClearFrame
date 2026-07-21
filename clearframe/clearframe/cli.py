@@ -20,33 +20,60 @@ app     = typer.Typer(name="clearframe", help="ClearFrame — secure agentic AI 
 console = Console()
 
 
-# ── start ─────────────────────────────────────────────────────────────────────
+# ── serve (full stack — preferred for EC2 / production demo) ──────────────────
+
+@app.command()
+def serve(
+    host: str = typer.Option("0.0.0.0", help="Bind address. Use 0.0.0.0 for EC2."),
+    port: int = typer.Option(8080, help="Public port (open this in your security group)."),
+    demo: bool = typer.Option(True, help="Demo mode — no login required."),
+) -> None:
+    """Start the full ClearFrame + Nexus Protocol stack (single port, branded UI)."""
+    import os
+
+    os.environ["CLEARFRAME_HOST"] = host
+    os.environ["CLEARFRAME_PORT"] = str(port)
+    os.environ["CLEARFRAME_DEMO"] = "1" if demo else "0"
+    from clearframe.gateway_app import serve as run_gateway
+
+    console.print("\n[bold]ClearFrame[/bold] · Nexus Protocol")
+    console.print(f"  Binding [cyan]{host}:{port}[/cyan]  auth={'off' if demo else 'on'}\n")
+    run_gateway(host=host, port=port)
+
+
+# ── start / ops-start (AgentOps API only) ─────────────────────────────────────
 
 @app.command()
 def start(
-    host: str = typer.Option("127.0.0.1", help="Bind address. Do NOT change to 0.0.0.0 in production."),
+    host: str = typer.Option("127.0.0.1", help="Bind address."),
     port: int = typer.Option(7477, help="Port for the AgentOps API."),
 ) -> None:
-    """Start the ClearFrame AgentOps server."""
+    """Start the ClearFrame AgentOps API only (no UI). Prefer `clearframe serve` for demos."""
     from clearframe.core.config import ClearFrameConfig, OpsConfig
-    from clearframe.ops.server  import create_ops_app
+    from clearframe.ops.server import create_ops_app
 
-    config          = ClearFrameConfig(ops=OpsConfig(host=host, port=port))
-    ops_app, token  = create_ops_app(config.ops)
+    config = ClearFrameConfig(ops=OpsConfig(host=host, port=port))
+    ops_app, token = create_ops_app(config.ops)
 
-    # ── FIX 1: write token to disk — never echo to terminal ──────────────
     token_path = Path.home() / ".clearframe" / "ops-token"
     token_path.parent.mkdir(parents=True, exist_ok=True)
     token_path.write_text(token)
     token_path.chmod(0o600)
-    # ─────────────────────────────────────────────────────────────────────
 
     console.print(f"\n[bold green]✓ ClearFrame AgentOps[/bold green] → http://{host}:{port}")
     console.print(f"  [yellow]Auth token saved →[/yellow] [cyan]{token_path}[/cyan]")
-    console.print("  [dim]Load it:  export CF_OPS_TOKEN=$(cat ~/.clearframe/ops-token)[/dim]\n")
-    console.print("  [dim]Press Ctrl+C to stop.[/dim]\n")
+    console.print("  [dim]For full UI + stack: clearframe serve[/dim]\n")
 
     uvicorn.run(ops_app, host=host, port=port, log_level="warning")
+
+
+@app.command("ops-start")
+def ops_start(
+    host: str = typer.Option("127.0.0.1"),
+    port: int = typer.Option(7477),
+) -> None:
+    """Alias for `start` (AgentOps API only)."""
+    start(host=host, port=port)
 
 
 # ── audit-verify ──────────────────────────────────────────────────────────────
