@@ -71,6 +71,29 @@ Custom packs: any YAML file with the same schema, loaded via
 | MEASURE | Goal alignment scores; Sonar threat events; audit metrics |
 | MANAGE | Policy engine decisions; auto-pause; Aegis termination |
 
+### ISO/IEC 42001:2023 — AI Management System
+
+ClearFrame implements the runtime-enforceable half of an ISO 42001 AIMS; the
+organisational half (context, leadership, resources) is documented here so a
+deployer can certify the combined system.
+
+| ISO 42001 clause / Annex A control | ClearFrame mechanism |
+|------------------------------------|----------------------|
+| Cl. 4 Context of the organisation | AgentSpec declares purpose, scope, and stakeholders per agent |
+| Cl. 5 Leadership / AI policy | This document (versioned, in-repo, auditable) |
+| Cl. 6 Planning (risk & opportunity) | Policy packs selected per agent; trust levels |
+| Cl. 7 Support (resources, competence) | Signed plugin registry; TrustRegistry certificates |
+| Cl. 8 Operation | Policy Engine gate on every tool call; manifest lock |
+| Cl. 9 Performance evaluation | `clearframe audit-verify`; `clearframe bench`; Sonar metrics |
+| Cl. 10 Improvement | Checkpointed sessions enable replay + corrective analysis |
+| A.5.5 Impact assessment | `iso-42001` pack: HITL for actions affecting individuals |
+| A.6.2.6 Operation & monitoring | Goal Monitor drift detection + auto-suspend |
+| A.8.4 Event logging | HMAC-chained audit log; RTL reasoning traces |
+| A.9.4 Intended use | GoalManifest locked at session start; deviations blocked |
+| A.10.3 Third-party tools | Adapters route external tools through the same governance |
+
+Activate the operational controls: `PolicyEngine.with_packs("iso-42001", ...)`.
+
 ### OWASP LLM Top 10 (2025)
 
 | Risk | ClearFrame mechanism |

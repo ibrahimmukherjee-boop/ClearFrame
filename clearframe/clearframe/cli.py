@@ -188,6 +188,28 @@ def agent_packs() -> None:
         console.print(f"  [cyan]{name:14}[/cyan] {pack.get('title', '')}")
 
 
+# ── bench ─────────────────────────────────────────────────────────────────────
+
+@app.command()
+def bench() -> None:
+    """Run the NexusProtocol governance benchmark and print the scorecard."""
+    from clearframe.bench import main as run_bench
+
+    report = run_bench()
+    np = report["nexusprotocol"]
+    console.print(f"\n[bold]NexusProtocol Governance Benchmark[/bold] — {report['ran_at']}")
+    console.print(f"  [green]NexusProtocol  {np['passed']}/{np['total']}[/green] controls enforced (measured live)\n")
+    table = Table("Control", "Result", "Detail", show_header=True)
+    for name, s in report["scenarios"].items():
+        mark = "[green]PASS[/green]" if s["passed"] else "[red]FAIL[/red]"
+        table.add_row(name, mark, s["detail"][:70])
+    console.print(table)
+    console.print("\n  Out-of-the-box comparison (vendor docs, Aug 2026):")
+    for vendor, score in report["competitors_out_of_the_box"].items():
+        console.print(f"    {vendor:22} {score['passed']}/{score['total']}")
+    console.print(f"\n  Report → ~/.nexus/bench-report.json\n")
+
+
 # ── vault ─────────────────────────────────────────────────────────────────────
 
 vault_app = typer.Typer(help="Manage the ClearFrame credential vault.")

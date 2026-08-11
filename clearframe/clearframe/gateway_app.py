@@ -101,11 +101,53 @@ def _create_clearframe_ops() -> FastAPI:
     return app
 
 
+def _gateway_token() -> str:
+    token_path = Path.home() / ".clearframe" / "gateway-token"
+    if token_path.exists():
+        return token_path.read_text().strip()
+    import secrets
+
+    token = secrets.token_urlsafe(32)
+    token_path.parent.mkdir(parents=True, exist_ok=True)
+    token_path.write_text(token)
+    try:
+        token_path.chmod(0o600)
+    except OSError:
+        pass
+    return token
+
+
 def create_gateway() -> FastAPI:
     _ensure_stack_imports()
     NEXUS_HOME.mkdir(parents=True, exist_ok=True)
 
-    app = FastAPI(title="ClearFrame", version="0.3.0", docs_url=None, redoc_url=None)
+    app = FastAPI(title="NexusProtocol", version="0.5.0", docs_url=None, redoc_url=None)
+
+    # Real bearer auth when demo mode is off (CLEARFRAME_DEMO=0).
+    gateway_token = _gateway_token()
+
+    @app.middleware("http")
+    async def _auth_middleware(request: Request, call_next):
+        if DEMO_MODE:
+            return await call_next(request)
+        path = request.url.path
+        if path in ("/", "/health") or path.startswith("/static") or path.startswith("/.well-known"):
+            return await call_next(request)
+        auth = request.headers.get("authorization", "")
+        import secrets as _secrets
+
+        if not auth.lower().startswith("bearer ") or not _secrets.compare_digest(
+            auth.split(None, 1)[1].strip(), gateway_token
+        ):
+            from fastapi.responses import JSONResponse
+
+            return JSONResponse(
+                {"detail": "Bearer token required (see ~/.clearframe/gateway-token)."},
+                status_code=401,
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        return await call_next(request)
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -175,8 +217,9 @@ def create_gateway() -> FastAPI:
                     results[name] = {"ok": False, "detail": str(exc)}
         return {
             "status": "ok" if all(v["ok"] for v in results.values()) else "degraded",
-            "product": "ClearFrame",
-            "stack": "Nexus Protocol",
+            "product": "NexusProtocol",
+            "tagline": "managed intelligence — the OS for AI agents",
+            "version": "0.5.0",
             "auth_required": not DEMO_MODE,
             "public_url": _public_url(request),
             "services": results,
@@ -241,6 +284,121 @@ def create_gateway() -> FastAPI:
         if r.status_code >= 400:
             raise HTTPException(status_code=r.status_code, detail=r.text)
         return {"status": "decided", "result": r.json()}
+
+    # ── Autonomous loop API — governed plan→act→observe ───────────────────
+
+    LOOPS_DIR = NEXUS_HOME / "checkpoints"
+
+    @app.post("/api/loop/run")
+    async def run_loop(payload: dict = Body(...)) -> dict:
+        from clearframe.core.checkpoint import CheckpointStore
+        from clearframe.core.config import ClearFrameConfig
+        from clearframe.core.manifest import GoalManifest, ToolPermission
+        from clearframe.core.session import AgentSession
+        from clearframe.loop import AgentLoop, LLMTurn, ScriptedPlanner, ToolCall
+        from clearframe.policy import PolicyEngine
+
+        goal = payload.get("goal", "Answer the user question accurately")
+        provider_kind = payload.get("provider", "scripted")
+
+        async def web_search(query: str = "") -> str:
+            return f"[3 results for '{query}': iso-42001.ai, nist.gov, owasp.org]"
+
+        async def send_email(to: str = "", body: str = "") -> str:
+            return f"queued email to {to}"
+
+        async def read_file(path: str = "") -> str:
+            return f"[contents of {path}]"
+
+        tools = {"web_search": web_search, "send_email": send_email, "read_file": read_file}
+        manifest = GoalManifest(
+            goal=goal,
+            permitted_tools=[
+                ToolPermission(tool_name="web_search", max_calls_per_session=5),
+                ToolPermission(tool_name="read_file", max_calls_per_session=5),
+                ToolPermission(tool_name="send_email", max_calls_per_session=1),
+            ],
+        )
+        packs = payload.get("policy_packs") or ["baseline", "iso-42001"]
+        engine = PolicyEngine.with_packs(*packs)
+
+        if provider_kind == "scripted":
+            provider = ScriptedPlanner([
+                LLMTurn(
+                    tool_calls=[ToolCall("web_search", {"query": goal[:60]})],
+                    thought="Search the web for authoritative sources on the goal.",
+                ),
+                LLMTurn(
+                    tool_calls=[ToolCall("send_email", {
+                        "to": "ops@nexusprotocol.dev",
+                        "body": "Findings attached for review.",
+                    })],
+                    thought="Notify the operator with findings before closing.",
+                ),
+                LLMTurn(
+                    content="Goal achieved: sources gathered and operator notified.",
+                    thought="All planned work is complete.",
+                ),
+            ])
+        elif provider_kind == "ollama":
+            from clearframe.loop import OllamaChatProvider
+
+            provider = OllamaChatProvider(model=payload.get("model", "llama3.1"))
+        elif provider_kind in ("openai", "openai_compat"):
+            from clearframe.loop import OpenAICompatProvider
+
+            provider = OpenAICompatProvider(
+                base_url=payload.get("base_url", "https://api.openai.com/v1"),
+                api_key=os.getenv(payload.get("api_key_env", "OPENAI_API_KEY"), ""),
+                model=payload.get("model", "gpt-4o-mini"),
+            )
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown provider '{provider_kind}'.")
+
+        session = AgentSession(ClearFrameConfig(), manifest,
+                               tool_registry=tools, policy_engine=engine)
+        await session.start()
+        try:
+            loop = AgentLoop(session, provider, max_steps=int(payload.get("max_steps", 8)),
+                             checkpoints=CheckpointStore(NEXUS_HOME / "checkpoints"))
+            result = await loop.run(goal)
+        finally:
+            await session.end()
+        return result.to_dict()
+
+    @app.get("/api/loop/{loop_id}")
+    def loop_status(loop_id: str) -> dict:
+        from clearframe.core.checkpoint import CheckpointStore
+
+        store = CheckpointStore(NEXUS_HOME / "checkpoints")
+        cp = store.latest(loop_id)
+        if cp is None:
+            raise HTTPException(status_code=404, detail=f"No loop '{loop_id}'.")
+        return {
+            "loop_id": loop_id,
+            "status": cp.status,
+            "step": cp.step,
+            "task": cp.task,
+            "checkpoints": len(store.load_all(loop_id)),
+            "chunks": cp.chunks,
+        }
+
+    # ── Governance benchmark ──────────────────────────────────────────────
+
+    @app.post("/api/bench/run")
+    async def bench_run() -> dict:
+        from clearframe.bench import run_benchmark
+
+        return await run_benchmark()
+
+    @app.get("/api/bench/report")
+    def bench_report() -> dict:
+        path = NEXUS_HOME / "bench-report.json"
+        if not path.exists():
+            raise HTTPException(status_code=404, detail="Run POST /api/bench/run first.")
+        import json as _json
+
+        return _json.loads(path.read_text())
 
     # ── Agents API — create agents from portable specs ────────────────────
 

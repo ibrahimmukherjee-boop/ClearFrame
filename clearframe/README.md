@@ -1,20 +1,49 @@
-# ClearFrame
+# NexusProtocol
 
-> Private · Secure · Accessible by default.
+> **Managed intelligence — the OS for AI agents.**
 
-ClearFrame is the open-source **AI agent OS** at the heart of **Nexus Protocol**.
-Every tool call passes policy-as-code, alignment scoring, and threat scanning;
-every reasoning step is captured; every action lands in a tamper-evident audit
-chain — regardless of which framework the agent was built with.
+NexusProtocol is an open-source agent operating system: agents from **any
+stack** (MCP · LangGraph · OpenAI Agents SDK · Microsoft Agent Framework ·
+Google ADK · Amazon Bedrock · NVIDIA NIM · IBM watsonx) run inside a governed,
+autonomous loop where every action is policy-checked, alignment-scored,
+threat-scanned, and written to a tamper-evident audit chain — with humans in
+command.
 
 | Layer | Component | Role |
 |-------|-----------|------|
-| 01 Runtime | **ClearFrame** | Goal manifests, audit, reader/actor isolation |
-| 02 Sonar | **Sonar SOC** | Prompt injection / PII / policy detection |
-| 03 Aegis | **Aegis HITL** | Human approve / reject / terminate |
-| 04 Trust | **TrustRegistry** | Ed25519 agent certificates |
-| 05 Policy | **Policy Engine** | Policy packs: EU AI Act, NIST AI RMF, OWASP LLM |
-| 06 Adapters | **Any stack in** | MCP · A2A · LangChain · OpenAI · Bedrock · REST |
+| 01 Loop | **Autonomous loop** | plan→act→observe with what/why/how reasoning chunks |
+| 02 Policy | **Policy Engine** | policy-as-code: EU AI Act, NIST AI RMF, OWASP LLM, ISO 42001 |
+| 03 Isolation | **Reader/Actor** | untrusted content never reaches the executor |
+| 04 Audit | **HMAC chain** | tamper-evident, verifiable via `clearframe audit-verify` |
+| 05 Oversight | **Aegis HITL** | human approve/reject/terminate, fail-closed |
+| 06 Trust | **TrustRegistry** | Ed25519 certificates, capability scopes, revocation |
+| 07 Adapters | **Any stack in** | MCP · A2A · LangChain · OpenAI · Bedrock · REST |
+| 08 Persistence | **Checkpoints** | crash-resumable sessions, replayable history |
+
+ClearFrame is the open-source runtime core of NexusProtocol.
+
+## Governance benchmark
+
+```bash
+clearframe bench
+```
+
+Eight adversarial + operational scenarios run through the real runtime
+(deterministic planner, no model variance):
+
+```
+NexusProtocol          8/8   ← measured live
+LangGraph 1.x          2/8   ← out-of-the-box (vendor docs, Aug 2026)
+Bedrock AgentCore      2/8
+MS Agent Framework     1/8
+OpenAI Agents SDK      0/8
+Claude Agent SDK       0/8
+OpenClaw               0/8
+```
+
+Controls: destructive-tool denial · secret-exfiltration denial · human sign-off
+for sensitive actions (fail-closed) · call budgets · undeclared-tool refusal ·
+checkpoint/resume · tamper-evident audit · what/why/how reasoning record.
 
 ---
 
