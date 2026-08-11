@@ -486,6 +486,85 @@ def create_gateway() -> FastAPI:
                 "hitl_queue": (await client.get(f"{base}/aegis/queue")).json(),
             }
 
+    # ── Parent-level convenience endpoints ────────────────────────────────
+    # The Sonar/Aegis/Trust apps are mounted sub-apps; the parent CORS
+    # middleware does not wrap them, so cross-origin callers (e.g. the
+    # GitHub Pages UI pointed at a remote gateway) proxy through these.
+
+    @app.post("/api/sonar/scan")
+    async def sonar_scan(payload: dict = Body(...)) -> dict:
+        base = _loopback()
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.post(f"{base}/sonar/scan", json={
+                "agent": payload.get("agent", "operator-console"),
+                "prompt": payload.get("prompt", ""),
+                "response": payload.get("response", ""),
+                "model": payload.get("model", "on-device"),
+            })
+        return r.json()
+
+    @app.get("/api/sonar/events")
+    async def sonar_events(limit: int = 20) -> list:
+        base = _loopback()
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            return (await client.get(f"{base}/sonar/events?limit={limit}")).json()
+
+    @app.get("/api/aegis/queue")
+    async def aegis_queue() -> list:
+        base = _loopback()
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            return (await client.get(f"{base}/aegis/queue")).json()
+
+    @app.get("/api/aegis/history")
+    async def aegis_history() -> list:
+        base = _loopback()
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            return (await client.get(f"{base}/aegis/history")).json()
+
+    @app.post("/api/aegis/decide")
+    async def aegis_decide(payload: dict = Body(...)) -> dict:
+        base = _loopback()
+        request_id = payload.get("request_id")
+        approved = payload.get("approved", True)
+        endpoint = "approve" if approved else "reject"
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.post(f"{base}/aegis/queue/{request_id}/{endpoint}", json={
+                "approved": approved,
+                "reviewer": payload.get("reviewer", "operator"),
+                "note": payload.get("note", ""),
+            })
+        if r.status_code >= 400:
+            raise HTTPException(status_code=r.status_code, detail=r.text)
+        return r.json()
+
+    @app.get("/api/trust/certificates")
+    async def trust_list() -> list:
+        base = _loopback()
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            return (await client.get(f"{base}/trust/certificates")).json()
+
+    @app.post("/api/trust/issue")
+    async def trust_issue(payload: dict = Body(...)) -> dict:
+        base = _loopback()
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.post(f"{base}/trust/certificates/issue", json={
+                "name": payload.get("name", "agent"),
+                "version": payload.get("version", "1.0.0"),
+                "owner": payload.get("owner", "operator"),
+                "trust_level": payload.get("trust_level", "STANDARD"),
+                "validity_days": payload.get("validity_days", 30),
+            })
+        return r.json()
+
+    @app.post("/api/trust/{cert_id}/revoke")
+    async def trust_revoke(cert_id: str) -> dict:
+        base = _loopback()
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.post(f"{base}/trust/certificates/{cert_id}/revoke")
+        if r.status_code >= 400:
+            raise HTTPException(status_code=r.status_code, detail=r.text)
+        return r.json()
+
     @app.get("/", response_model=None)
     def index() -> FileResponse | HTMLResponse:
         index_path = WEB_DIR / "index.html"
