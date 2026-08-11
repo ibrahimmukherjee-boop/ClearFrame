@@ -6,294 +6,347 @@
 <title>ClearFrame — Control Plane</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
 <style>
 :root {
-  --bg: #0c0e0a; --text: #f2f1ea; --muted: #8a8a7a; --lime: #d9e69d;
-  --lime-dim: rgba(217,230,157,.14); --red: #c93a3a; --ok: #9bcf6a;
-  --glass: rgba(255,255,255,.04); --border: rgba(255,255,255,.1);
-  --font: "Space Grotesk", system-ui, sans-serif;
+  --paper: #f2f1ed; --ink: #141412; --muted: #8a8a83;
+  --line: rgba(20,20,18,.12); --red: #c22f2f; --ok: #2f7d3f;
+  --font: "Inter", system-ui, sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, monospace;
+  --raise: 7px 7px 18px rgba(20,20,18,.14), -6px -6px 14px rgba(255,255,255,.9);
+  --sink: inset 5px 5px 10px rgba(20,20,18,.11), inset -4px -4px 9px rgba(255,255,255,.9);
 }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-body {
-  font-family: var(--font); color: var(--text); background: var(--bg);
-  min-height: 100vh; -webkit-font-smoothing: antialiased;
-}
-.atmosphere {
-  position: fixed; inset: 0; z-index: 0; pointer-events: none;
-  background:
-    radial-gradient(ellipse 70% 50% at 50% 14%, rgba(217,230,157,.16), transparent 55%),
-    linear-gradient(180deg, #0c0e0a, #10130c 55%, #0a0b08);
-}
+body { font-family: var(--font); color: var(--ink); background: var(--paper); min-height: 100vh; -webkit-font-smoothing: antialiased; }
 .grain {
-  position: fixed; inset: 0; z-index: 1; pointer-events: none; opacity: .32;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
-  mix-blend-mode: overlay;
+  position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: .45;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 220 220' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.14'/%3E%3C/svg%3E");
 }
-.shell { position: relative; z-index: 2; min-height: 100vh; display: flex; flex-direction: column; }
+.shell { position: relative; z-index: 1; max-width: 1180px; margin: 0 auto; padding: 0 clamp(1rem, 3vw, 2rem) 3rem; }
 .top {
   display: flex; justify-content: space-between; align-items: center; gap: 1rem;
-  padding: 1.25rem clamp(1rem, 3vw, 2.5rem);
-  border-bottom: 1px solid rgba(255,255,255,.06);
+  padding: 1.2rem 0; border-bottom: 1px solid var(--line); margin-bottom: 1.4rem;
 }
-.brand { display: flex; align-items: center; gap: .75rem; }
+.brand { display: flex; align-items: center; gap: .7rem; }
 .mark {
-  width: 36px; height: 36px; border: 1.5px solid rgba(255,255,255,.85);
-  border-radius: 9px; display: grid; place-items: center;
+  width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center;
+  background: var(--paper); box-shadow: var(--raise);
 }
-.mark svg { width: 18px; height: 18px; }
-.brand strong { font-size: 1.05rem; }
-.brand span { color: var(--muted); font-size: .72rem; margin-left: .4rem; letter-spacing: .06em; text-transform: uppercase; }
-.userbar { display: flex; align-items: center; gap: .75rem; font-size: .85rem; color: var(--muted); }
+.mark svg { width: 19px; height: 19px; }
+.brand strong { font-size: 1rem; letter-spacing: -.01em; }
+.brand span { font-family: var(--mono); font-size: .58rem; color: var(--muted); letter-spacing: .14em; text-transform: uppercase; display: block; margin-top: .1rem; }
+.userbar { display: flex; align-items: center; gap: .7rem; font-size: .82rem; color: var(--muted); }
 .btn {
   appearance: none; border: none; cursor: pointer; font-family: inherit; font-weight: 600;
-  padding: .65rem 1rem; border-radius: 10px; font-size: .85rem;
+  padding: .6rem 1rem; border-radius: 11px; font-size: .82rem;
+  background: var(--paper); color: var(--ink); box-shadow: var(--raise);
+  transition: transform .12s ease;
 }
-.btn-primary { background: var(--lime); color: #12140f; box-shadow: 0 0 22px rgba(217,230,157,.25); }
-.btn-ghost { background: transparent; color: var(--text); border: 1px solid rgba(255,255,255,.16); }
-.btn-danger { background: var(--red); color: #fff; }
-.btn:disabled { opacity: .4; cursor: not-allowed; }
+.btn:hover { transform: translateY(-1px); }
+.btn:active { transform: scale(.98); box-shadow: var(--sink); }
+.btn-ink { background: var(--ink); color: var(--paper); }
+.btn-red { background: var(--red); color: #fff; }
+.btn:disabled { opacity: .35; cursor: not-allowed; transform: none; }
 
-.hero { padding: 1.5rem clamp(1rem, 3vw, 2.5rem) .5rem; }
-.hero h2 {
-  font-size: clamp(1.15rem, 2.4vw, 1.5rem); font-weight: 500; max-width: 36rem; line-height: 1.4;
+.tabs { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1.4rem; }
+.tab {
+  font-family: var(--mono); font-size: .66rem; letter-spacing: .1em; text-transform: uppercase;
+  padding: .55rem .95rem; border-radius: 999px; cursor: pointer; border: none;
+  background: var(--paper); color: var(--muted); box-shadow: var(--raise);
 }
-.hero h2 em { font-style: normal; color: var(--lime); }
-.meta {
-  margin-top: .75rem; display: flex; flex-wrap: wrap; gap: .5rem .75rem;
-  font-family: var(--mono); font-size: .68rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted);
-}
-.badge {
-  display: inline-flex; align-items: center; gap: .35rem;
-  padding: .2rem .55rem; border-radius: 999px; background: var(--lime-dim);
-  color: var(--lime); border: 1px solid rgba(217,230,157,.25);
-}
-.dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+.tab.active { background: var(--ink); color: var(--paper); }
 
-.stack {
-  padding: 1rem clamp(1rem, 3vw, 2.5rem);
-  display: grid; gap: .65rem; max-width: 980px;
-}
-.layer {
-  display: grid; grid-template-columns: 110px 1fr auto; gap: 1rem; align-items: center;
-  padding: .95rem 1.1rem; border-radius: 14px; background: var(--glass);
-  border: 1px solid var(--border); backdrop-filter: blur(12px);
-}
-.layer .tag { font-family: var(--mono); font-size: .65rem; letter-spacing: .1em; text-transform: uppercase; color: var(--lime); }
-.layer h3 { font-size: .92rem; margin-bottom: .1rem; }
-.layer p { font-size: .78rem; color: var(--muted); }
-.layer .st { font-family: var(--mono); font-size: .65rem; letter-spacing: .06em; text-transform: uppercase; color: var(--ok); }
+.view { display: none; }
+.view.active { display: block; animation: rise .45s ease both; }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
-.plane {
-  padding: 0 clamp(1rem, 3vw, 2.5rem) 2rem;
-  display: grid; grid-template-columns: 1.15fr .85fr; gap: 1rem;
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 1rem; }
+.card {
+  background: var(--paper); border-radius: 18px; padding: 1.2rem;
+  box-shadow: var(--raise);
 }
-@media (max-width: 860px) {
-  .plane { grid-template-columns: 1fr; }
-  .layer { grid-template-columns: 1fr; }
+.card h3 { font-size: .95rem; margin-bottom: .3rem; }
+.card .k { font-family: var(--mono); font-size: .6rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: .6rem; }
+.card p { font-size: .8rem; color: var(--muted); line-height: 1.5; }
+.pill {
+  display: inline-block; font-family: var(--mono); font-size: .58rem; letter-spacing: .08em;
+  text-transform: uppercase; padding: .2rem .55rem; border-radius: 999px;
+  box-shadow: var(--sink); color: var(--muted); margin: .15rem .25rem .15rem 0;
 }
-.panel {
-  background: var(--glass); border: 1px solid var(--border); border-radius: 16px;
-  padding: 1.2rem; backdrop-filter: blur(14px); min-height: 300px;
-  display: flex; flex-direction: column;
-}
-.panel h2 {
-  font-size: .7rem; letter-spacing: .12em; text-transform: uppercase;
-  color: var(--muted); margin-bottom: .9rem; font-weight: 500;
-}
-.actions { display: flex; flex-wrap: wrap; gap: .55rem; margin-bottom: .9rem; }
-.banner {
-  margin-bottom: .9rem; padding: .65rem .8rem; border-radius: 10px;
-  background: var(--lime-dim); border: 1px solid rgba(217,230,157,.25);
-  color: var(--lime); font-size: .8rem;
-}
+.pill.on { color: var(--ok); }
+.pill.red { color: var(--red); }
+
+.hero { margin-bottom: 1.5rem; }
+.hero h2 { font-size: clamp(1.2rem, 2.6vw, 1.65rem); font-weight: 600; letter-spacing: -.02em; max-width: 40rem; line-height: 1.35; }
+.hero .sub { margin-top: .5rem; font-size: .85rem; color: var(--muted); max-width: 44rem; line-height: 1.55; }
+
 pre.out {
-  flex: 1; font-family: var(--mono); font-size: .72rem; line-height: 1.5;
-  background: rgba(0,0,0,.35); border-radius: 10px; padding: .85rem;
-  overflow: auto; max-height: 340px; color: #cfcfbf; white-space: pre-wrap; word-break: break-word;
+  font-family: var(--mono); font-size: .7rem; line-height: 1.55;
+  background: var(--paper); border-radius: 12px; padding: .9rem;
+  box-shadow: var(--sink); overflow: auto; max-height: 320px;
+  color: #3c3c38; white-space: pre-wrap; word-break: break-word;
 }
-.health-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .55rem; }
-.health-card {
-  padding: .7rem; border-radius: 10px; background: rgba(0,0,0,.25);
-  border: 1px solid rgba(255,255,255,.06);
+.split { display: grid; grid-template-columns: 1.05fr .95fr; gap: 1rem; }
+@media (max-width: 900px) { .split { grid-template-columns: 1fr; } }
+.actions { display: flex; flex-wrap: wrap; gap: .55rem; margin: .9rem 0; }
+
+input, select, textarea {
+  width: 100%; padding: .7rem .9rem; margin-bottom: .8rem;
+  border-radius: 11px; border: none; background: var(--paper); color: var(--ink);
+  font-family: var(--font); font-size: .85rem; outline: none; box-shadow: var(--sink);
 }
-.health-card .name { font-size: .7rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: .3rem; }
-.health-card .val { font-family: var(--mono); font-size: .78rem; color: var(--ok); }
+label { display: block; font-family: var(--mono); font-size: .6rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: .35rem; }
+.check { display: flex; align-items: center; gap: .5rem; margin-bottom: .8rem; }
+.check input { width: auto; margin: 0; box-shadow: none; }
+.check span { font-size: .8rem; color: var(--muted); }
+
+table { width: 100%; border-collapse: collapse; font-size: .78rem; }
+th { font-family: var(--mono); font-size: .58rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); text-align: left; padding: .45rem .5rem; border-bottom: 1px solid var(--line); }
+td { padding: .5rem; border-bottom: 1px solid var(--line); vertical-align: top; }
 .footer {
-  margin-top: auto; padding: 1rem clamp(1rem, 3vw, 2.5rem);
-  border-top: 1px solid rgba(255,255,255,.06);
+  margin-top: 2.5rem; padding-top: 1rem; border-top: 1px solid var(--line);
   display: flex; flex-wrap: wrap; justify-content: space-between; gap: .5rem;
-  font-family: var(--mono); font-size: .65rem; letter-spacing: .1em;
-  text-transform: uppercase; color: var(--muted);
+  font-family: var(--mono); font-size: .58rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
 }
-@keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
-.hero, .stack, .plane { animation: rise .7s ease both; }
-.stack { animation-delay: .05s; }
-.plane { animation-delay: .1s; }
+.reddot { display:inline-block; width:7px; height:7px; border-radius:50%; background: var(--red); margin-right:.35rem; }
+.okdot { display:inline-block; width:7px; height:7px; border-radius:50%; background: var(--ok); margin-right:.35rem; }
 </style>
 </head>
 <body>
-<div class="atmosphere"></div>
 <div class="grain"></div>
 <div class="shell">
   <header class="top">
     <div class="brand">
       <div class="mark" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.6">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#141412" stroke-width="1.7">
           <path d="M8 8c-2.2 2.2-2.2 5.8 0 8M16 8c2.2 2.2 2.2 5.8 0 8M10 12h4"/>
           <circle cx="8" cy="12" r="2.2"/><circle cx="16" cy="12" r="2.2"/>
         </svg>
       </div>
-      <div><strong>ClearFrame</strong><span>Nexus Protocol</span></div>
+      <div><strong>ClearFrame</strong><span>Nexus Protocol · Agent OS</span></div>
     </div>
     <div class="userbar">
       <span id="who">operator</span>
-      <button class="btn btn-ghost" type="button" onclick="logout()">Sign out</button>
+      <button class="btn" type="button" onclick="logout()">Sign out</button>
     </div>
   </header>
 
   <section class="hero">
-    <h2>Intelligence at the edge — <em>private</em>, secure, accessible by default.</h2>
-    <div class="meta">
-      <span class="badge"><i class="dot"></i> Deployed</span>
-      <span>GitHub Pages</span>
-      <span id="stamp"></span>
+    <h2>An operating system for AI agents — governed, auditable, human-controlled.</h2>
+    <p class="sub">Create agents from any stack (MCP, LangChain/LangGraph, OpenAI, Microsoft, Google ADK, Amazon Bedrock, NVIDIA NIM, IBM watsonx), enforce policy-as-code mapped to the EU AI Act / NIST AI RMF / OWASP LLM Top 10, and keep every action inside a tamper-evident audit chain with human veto.</p>
+  </section>
+
+  <nav class="tabs">
+    <button class="tab active" data-v="overview" onclick="show('overview')">Overview</button>
+    <button class="tab" data-v="agents" onclick="show('agents')">Create Agent</button>
+    <button class="tab" data-v="adapters" onclick="show('adapters')">Adapters</button>
+    <button class="tab" data-v="policies" onclick="show('policies')">Policies</button>
+    <button class="tab" data-v="pipeline" onclick="show('pipeline')">Pipeline</button>
+  </nav>
+
+  <!-- OVERVIEW -->
+  <section class="view active" id="v-overview">
+    <div class="grid">
+      <div class="card"><div class="k">01 · Runtime</div><h3>ClearFrame Core</h3><p>Goal manifests, HMAC audit chain, reader/actor isolation, encrypted vault, reasoning traces.</p><span class="pill on">online</span></div>
+      <div class="card"><div class="k">02 · Sonar</div><h3>Threat SOC</h3><p>Prompt-injection, PII and exfiltration scanning on every context chunk and output.</p><span class="pill on">online</span></div>
+      <div class="card"><div class="k">03 · Aegis</div><h3>Human Oversight</h3><p>Approve / revise / terminate queues with timeouts. Fail-closed when nobody answers.</p><span class="pill on">online</span></div>
+      <div class="card"><div class="k">04 · Trust</div><h3>TrustRegistry</h3><p>Ed25519 agent certificates, capability scopes, revocation lists, A2A AgentCards.</p><span class="pill on">online</span></div>
+      <div class="card"><div class="k">05 · Policy</div><h3>Policy Engine</h3><p>Policy-as-code on every tool call: deny lists, domain scopes, data guards, HITL rules, budgets.</p><span class="pill on">4 packs</span></div>
+      <div class="card"><div class="k">06 · Adapters</div><h3>Any Stack In</h3><p>MCP · A2A · LangChain · OpenAI tools · Bedrock action groups · REST/OpenAPI (NIM, watsonx).</p><span class="pill on">6 adapters</span></div>
     </div>
   </section>
 
-  <section class="stack">
-    <article class="layer"><div class="tag">01 · Runtime</div><div><h3>ClearFrame</h3><p>Agent OS — goals, audit chain, reader/actor isolation</p></div><div class="st">online</div></article>
-    <article class="layer"><div class="tag">02 · Sonar</div><div><h3>Sonar SOC</h3><p>Threat matrix — injection, PII, policy drift</p></div><div class="st">online</div></article>
-    <article class="layer"><div class="tag">03 · Aegis</div><div><h3>Aegis HITL</h3><p>Human veto — approve, revise, terminate</p></div><div class="st">online</div></article>
-    <article class="layer"><div class="tag">04 · Trust</div><div><h3>TrustRegistry</h3><p>Edge PKI — Ed25519 certificates &amp; scopes</p></div><div class="st">online</div></article>
-  </section>
-
-  <section class="plane">
-    <div class="panel">
-      <h2>Control Plane</h2>
-      <div class="banner">Signed in. Run the Nexus pipeline demo (Trust → Sonar → Aegis).</div>
-      <div class="actions">
-        <button class="btn btn-primary" id="run-btn" onclick="runPipeline()">Run Pipeline</button>
-        <button class="btn btn-ghost" onclick="refresh()">Refresh</button>
-        <button class="btn btn-primary" id="approve-btn" disabled onclick="decide(true)">Approve</button>
-        <button class="btn btn-danger" id="reject-btn" disabled onclick="decide(false)">Reject</button>
+  <!-- CREATE AGENT -->
+  <section class="view" id="v-agents">
+    <div class="split">
+      <div class="card">
+        <div class="k">New Agent Spec</div>
+        <label>Name</label><input id="a-name" value="support-bot" />
+        <label>Goal</label><input id="a-goal" value="Answer customer support tickets accurately and politely" />
+        <label>Provider / Model</label>
+        <select id="a-provider">
+          <option value="ollama/llama3">Ollama · llama3 (local)</option>
+          <option value="openai/gpt-4o">OpenAI · gpt-4o</option>
+          <option value="anthropic/claude">Anthropic · Claude</option>
+          <option value="bedrock/anthropic.claude">Amazon Bedrock · Claude</option>
+          <option value="google/gemini">Google · Gemini (ADK)</option>
+          <option value="nim/llama-3.1">NVIDIA NIM · llama-3.1</option>
+          <option value="watsonx/granite">IBM watsonx · Granite</option>
+        </select>
+        <label>Tool source</label>
+        <select id="a-adapter">
+          <option value="native">Native ClearFrame tools</option>
+          <option value="mcp">MCP server (endpoint URL)</option>
+          <option value="langchain">LangChain / LangGraph tools</option>
+          <option value="openai">OpenAI tools manifest</option>
+          <option value="bedrock">Bedrock action group</option>
+          <option value="http">REST / OpenAPI endpoint</option>
+        </select>
+        <label>Tools (comma-separated)</label><input id="a-tools" value="web_search, send_email" />
+        <label>Policy packs</label>
+        <div class="check"><input type="checkbox" id="p-baseline" checked /><span>baseline</span></div>
+        <div class="check"><input type="checkbox" id="p-eu" checked /><span>eu-ai-act</span></div>
+        <div class="check"><input type="checkbox" id="p-nist" /><span>nist-ai-rmf</span></div>
+        <div class="check"><input type="checkbox" id="p-owasp" /><span>owasp-llm</span></div>
+        <button class="btn btn-ink" onclick="buildSpec()">Generate agent spec</button>
       </div>
-      <pre class="out" id="out">Ready. Click Run Pipeline.</pre>
+      <div class="card">
+        <div class="k">Spec (YAML) — runs via <span style="text-transform:none">clearframe agent validate</span></div>
+        <pre class="out" id="spec-out"># Click "Generate agent spec"</pre>
+        <div class="actions">
+          <button class="btn" onclick="copySpec()">Copy YAML</button>
+        </div>
+        <p style="font-size:.75rem;color:var(--muted);line-height:1.5">Save as <b>name.agent.yaml</b>, then run <b>clearframe agent validate name.agent.yaml</b> or POST it to <b>/api/agents</b> on your gateway. Same spec runs anywhere ClearFrame runs.</p>
+      </div>
     </div>
-    <div class="panel">
-      <h2>Service Health</h2>
-      <div class="health-grid" id="health"></div>
-      <pre class="out" id="stack-out" style="margin-top:1rem;max-height:180px">Awaiting pipeline…</pre>
+  </section>
+
+  <!-- ADAPTERS -->
+  <section class="view" id="v-adapters">
+    <div class="grid">
+      <div class="card"><div class="k">Protocol</div><h3>MCP</h3><p>Consume any Model Context Protocol server (Streamable HTTP). Tools land in the governed registry — policy, audit, and HITL apply automatically.</p><span class="pill on">MCPAdapter(url)</span></div>
+      <div class="card"><div class="k">Protocol</div><h3>A2A</h3><p>Spec-compliant AgentCard at /.well-known/agent-card.json so Copilot Studio, Azure AI Foundry, Bedrock AgentCore, and Google ADK agents can discover and delegate to ClearFrame.</p><span class="pill on">a2a_card()</span></div>
+      <div class="card"><div class="k">Framework</div><h3>LangChain / LangGraph</h3><p>Wrap BaseTool instances — the tool layer of LangGraph, CrewAI, and most Python frameworks — into governed callables.</p><span class="pill on">LangChainAdapter(tools)</span></div>
+      <div class="card"><div class="k">Framework</div><h3>OpenAI / Microsoft</h3><p>Import OpenAI function-calling manifests (Agents SDK, Azure OpenAI, Microsoft Agent Framework) and export ClearFrame tools back out.</p><span class="pill on">OpenAIToolsAdapter</span></div>
+      <div class="card"><div class="k">Cloud</div><h3>Amazon Bedrock</h3><p>Import Bedrock Agent action groups (boto3 or JSON export); export ClearFrame tools as an action-group OpenAPI payload for AgentCore.</p><span class="pill on">BedrockAdapter</span></div>
+      <div class="card"><div class="k">REST</div><h3>NVIDIA NIM · IBM watsonx · anything</h3><p>Generic HTTP/OpenAPI adapter turns any REST route — NIM endpoints, watsonx Orchestrate skills, internal APIs — into one governed tool.</p><span class="pill on">HTTPToolAdapter</span></div>
+    </div>
+  </section>
+
+  <!-- POLICIES -->
+  <section class="view" id="v-policies">
+    <div class="card" style="margin-bottom:1rem">
+      <div class="k">Policy-as-code</div>
+      <p style="font-size:.82rem;color:var(--muted);line-height:1.55">Every tool call is evaluated <b style="color:var(--ink)">before</b> execution: <span class="pill">tools.deny</span><span class="pill">tools.allow</span><span class="pill">domains.allow</span><span class="pill">data.deny_patterns</span><span class="pill red">actions.require_approval → Aegis</span><span class="pill">limits.max_calls_per_tool</span><span class="pill">trust.min_level</span>. Most restrictive decision wins. Full governance document: <b>docs/governance/AI-POLICY.md</b> in the repo.</p>
+    </div>
+    <table>
+      <thead><tr><th>Pack</th><th>Regime</th><th>Key controls</th></tr></thead>
+      <tbody>
+        <tr><td><b>baseline</b></td><td>ClearFrame defaults</td><td>Destructive-tool deny list · secret/PII guards · HITL for irreversible actions · 50-call budgets</td></tr>
+        <tr><td><b>eu-ai-act</b></td><td>EU AI Act (Reg. 2024/1689)</td><td>Art. 5 prohibited practices blocked · Art. 14 human oversight for significant decisions · Art. 12 logging · special-category data guards</td></tr>
+        <tr><td><b>nist-ai-rmf</b></td><td>NIST AI RMF 1.0 + GenAI Profile</td><td>MANAGE 2.4 deactivation · MEASURE 2.7 security · SSN/credit-card patterns · code-execution HITL</td></tr>
+        <tr><td><b>owasp-llm</b></td><td>OWASP LLM Top 10 (2025)</td><td>LLM02 disclosure guards · LLM06 excessive-agency limits · LLM10 consumption limits · exfil HITL</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- PIPELINE -->
+  <section class="view" id="v-pipeline">
+    <div class="split">
+      <div class="card">
+        <div class="k">Governed pipeline demo</div>
+        <p style="font-size:.8rem;color:var(--muted);margin-bottom:.4rem">Trust cert → policy check → Sonar scan → Aegis HITL. Same flow the live gateway runs.</p>
+        <div class="actions">
+          <button class="btn btn-ink" id="run-btn" onclick="runPipeline()">Run Pipeline</button>
+          <button class="btn" id="approve-btn" disabled onclick="decide(true)">Approve</button>
+          <button class="btn btn-red" id="reject-btn" disabled onclick="decide(false)">Reject</button>
+        </div>
+        <pre class="out" id="out">Ready.</pre>
+      </div>
+      <div class="card">
+        <div class="k">Session state</div>
+        <pre class="out" id="stack-out">No runs yet.</pre>
+      </div>
     </div>
   </section>
 
   <footer class="footer">
-    <div>Multi-model routing / Agents / Deployed</div>
+    <div><span class="reddot"></span>MCP · A2A · LangGraph · Bedrock · NIM · watsonx</div>
     <div>© ClearFrame · Nexus Protocol</div>
   </footer>
 </div>
+
 <script>
 (function () {
   const KEY = "clearframe_session_v1";
-  if (sessionStorage.getItem(KEY) !== "ok") {
-    location.replace("./index.html");
-    return;
-  }
+  if (sessionStorage.getItem(KEY) !== "ok") { location.replace("./index.html"); return; }
   document.getElementById("who").textContent = sessionStorage.getItem("clearframe_user") || "operator";
-  document.getElementById("stamp").textContent = new Date().toISOString().slice(0, 19) + "Z";
-
-  const state = {
-    certs: [],
-    sonar: [],
-    hitl: null,
-    history: [],
-  };
 
   window.logout = function () {
-    sessionStorage.removeItem(KEY);
-    sessionStorage.removeItem("clearframe_user");
+    sessionStorage.removeItem(KEY); sessionStorage.removeItem("clearframe_user");
     location.href = "./index.html";
   };
 
-  function uid(prefix) {
-    return prefix + "-" + Math.random().toString(16).slice(2, 10);
-  }
-
-  window.refresh = function () {
-    const services = [
-      ["clearframe", "OK"],
-      ["trust_registry", "OK"],
-      ["sonar", "OK"],
-      ["aegis", "OK"],
-    ];
-    document.getElementById("health").innerHTML = services.map(([n, v]) =>
-      `<div class="health-card"><div class="name">${n}</div><div class="val">${v}</div></div>`
-    ).join("");
-    document.getElementById("stack-out").textContent = JSON.stringify({
-      certs: state.certs.length,
-      sonar_events: state.sonar.slice(0, 3),
-      hitl_pending: state.hitl ? 1 : 0,
-      last_decision: state.history.slice(-1)[0] || null,
-    }, null, 2);
+  window.show = function (name) {
+    document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
+    document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.v === name));
+    document.getElementById("v-" + name).classList.add("active");
   };
 
+  // ── Agent spec builder ──
+  window.buildSpec = function () {
+    const [provider, model] = document.getElementById("a-provider").value.split("/");
+    const adapter = document.getElementById("a-adapter").value;
+    const tools = document.getElementById("a-tools").value.split(",").map(s => s.trim()).filter(Boolean);
+    const packs = [];
+    if (document.getElementById("p-baseline").checked) packs.push("baseline");
+    if (document.getElementById("p-eu").checked) packs.push("eu-ai-act");
+    if (document.getElementById("p-nist").checked) packs.push("nist-ai-rmf");
+    if (document.getElementById("p-owasp").checked) packs.push("owasp-llm");
+    const name = document.getElementById("a-name").value.trim() || "my-agent";
+    const goal = document.getElementById("a-goal").value.trim();
+    const lines = [
+      'schema_version: "1.0"',
+      "name: " + name,
+      "goal: " + goal,
+      "provider: " + provider,
+      "model: " + model,
+      "tools:",
+    ];
+    tools.forEach(t => {
+      lines.push("  - name: " + t);
+      lines.push("    adapter: " + adapter);
+      if (adapter === "mcp") lines.push('    config: { endpoint: "https://your-mcp-server/mcp" }');
+      if (adapter === "http") lines.push('    config: { url: "https://your-api/' + t + '", method: POST }');
+      if (adapter === "bedrock") lines.push('    config: { agent_id: "YOUR_AGENT_ID", region: us-east-1 }');
+      if (/send|transfer|refund|deploy|publish/.test(t)) lines.push("    require_approval: true");
+    });
+    lines.push("policy_packs: [" + packs.join(", ") + "]");
+    lines.push("trust_level: STANDARD");
+    document.getElementById("spec-out").textContent = lines.join("\n");
+  };
+
+  window.copySpec = function () {
+    navigator.clipboard.writeText(document.getElementById("spec-out").textContent);
+  };
+
+  // ── Pipeline demo ──
+  const state = { certs: 0, hitl: null, history: [] };
+  const uid = p => p + "-" + Math.random().toString(16).slice(2, 10);
+
   window.runPipeline = function () {
-    const cert = {
-      certificate_id: uid("cert"),
-      agent_name: "SupportBot v2",
-      trust_level: "STANDARD",
-      status: "verified",
-      signature: "ed25519:" + Math.random().toString(16).slice(2, 18) + "...",
-    };
-    const sonar = {
-      safe: true,
-      blocked: false,
-      alerts: [{ type: "ok", severity: "info", message: "Routine scan passed — output within policy bounds" }],
-    };
-    const hitl = {
-      id: uid("h"),
-      agentName: "SupportBot v2",
-      type: "approval",
-      payload: 'Draft response: "Your refund of $499.99 has been processed."',
-      status: "pending",
-    };
-    state.certs.push(cert);
-    state.sonar.unshift(sonar.alerts[0]);
-    state.hitl = hitl;
-    const result = {
-      status: "awaiting_hitl",
-      goal: "Process customer support tickets with 95% accuracy",
-      certificate: cert,
-      sonar_context_scan: sonar,
-      hitl_request: hitl,
-    };
-    document.getElementById("out").textContent = JSON.stringify(result, null, 2);
+    state.certs += 1;
+    const cert = { certificate_id: uid("cert"), trust_level: "STANDARD", status: "verified" };
+    const policy = { engine: ["baseline", "eu-ai-act"], decision: "require_hitl", rule: "actions.require_approval:send_email" };
+    const sonar = { safe: true, alerts: [{ type: "ok", severity: "info", message: "Scan passed — within policy bounds" }] };
+    state.hitl = { id: uid("h"), payload: 'Draft: "Your refund of $499.99 has been processed."' };
+    document.getElementById("out").textContent = JSON.stringify({
+      status: "awaiting_hitl", certificate: cert, policy, sonar, hitl_request: state.hitl,
+    }, null, 2);
     document.getElementById("approve-btn").disabled = false;
     document.getElementById("reject-btn").disabled = false;
-    refresh();
+    sync();
   };
 
   window.decide = function (approved) {
     if (!state.hitl) return;
-    const decision = {
-      status: "decided",
-      result: {
-        id: state.hitl.id,
-        status: approved ? "approved" : "rejected",
-        reviewer: sessionStorage.getItem("clearframe_user") || "operator",
-        note: approved ? "Approved on GitHub Pages demo" : "Rejected on GitHub Pages demo",
-      },
-    };
-    state.history.push(decision.result);
+    state.history.push({ id: state.hitl.id, status: approved ? "approved" : "rejected",
+      reviewer: sessionStorage.getItem("clearframe_user") || "operator" });
+    document.getElementById("out").textContent += "\n\n" + JSON.stringify({ decided: state.history.at(-1) }, null, 2);
     state.hitl = null;
-    document.getElementById("out").textContent += "\n\n" + JSON.stringify(decision, null, 2);
     document.getElementById("approve-btn").disabled = true;
     document.getElementById("reject-btn").disabled = true;
-    refresh();
+    sync();
   };
 
-  refresh();
+  function sync() {
+    document.getElementById("stack-out").textContent = JSON.stringify({
+      certificates_issued: state.certs,
+      hitl_pending: state.hitl ? 1 : 0,
+      decisions: state.history,
+    }, null, 2);
+  }
+  sync();
 })();
 </script>
 </body>
