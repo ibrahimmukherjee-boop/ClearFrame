@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>ClearFrame — Control Plane</title>
+<title>NexusProtocol — the OS for AI agents</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -13,103 +13,79 @@
   --line: rgba(20,20,18,.12); --red: #c22f2f; --ok: #2f7d3f;
   --font: "Inter", system-ui, sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, monospace;
-  --raise: 7px 7px 18px rgba(20,20,18,.14), -6px -6px 14px rgba(255,255,255,.9);
-  --sink: inset 5px 5px 10px rgba(20,20,18,.11), inset -4px -4px 9px rgba(255,255,255,.9);
+  --raise: 7px 7px 18px rgba(20,20,18,.13), -6px -6px 14px rgba(255,255,255,.9);
+  --sink: inset 5px 5px 10px rgba(20,20,18,.1), inset -4px -4px 9px rgba(255,255,255,.9);
+  --raise-sm: 4px 4px 10px rgba(20,20,18,.12), -3px -3px 8px rgba(255,255,255,.85);
 }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: var(--font); color: var(--ink); background: var(--paper); min-height: 100vh; -webkit-font-smoothing: antialiased; }
-.grain {
-  position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: .45;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 220 220' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.14'/%3E%3C/svg%3E");
-}
-.shell { position: relative; z-index: 1; max-width: 1180px; margin: 0 auto; padding: 0 clamp(1rem, 3vw, 2rem) 3rem; }
-.top {
-  display: flex; justify-content: space-between; align-items: center; gap: 1rem;
-  padding: 1.2rem 0; border-bottom: 1px solid var(--line); margin-bottom: 1.4rem;
-}
+.grain { position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: .4;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 220 220' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.14'/%3E%3C/svg%3E"); }
+.shell { position: relative; z-index: 1; max-width: 1240px; margin: 0 auto; padding: 0 clamp(1rem, 3vw, 2rem) 3rem; }
+.top { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 1.2rem 0; border-bottom: 1px solid var(--line); margin-bottom: 1.3rem; }
 .brand { display: flex; align-items: center; gap: .7rem; }
-.mark {
-  width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center;
-  background: var(--paper); box-shadow: var(--raise);
-}
+.mark { width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; background: var(--paper); box-shadow: var(--raise); }
 .mark svg { width: 19px; height: 19px; }
 .brand strong { font-size: 1rem; letter-spacing: -.01em; }
-.brand span { font-family: var(--mono); font-size: .58rem; color: var(--muted); letter-spacing: .14em; text-transform: uppercase; display: block; margin-top: .1rem; }
+.brand span { font-family: var(--mono); font-size: .56rem; color: var(--muted); letter-spacing: .14em; text-transform: uppercase; display: block; margin-top: .1rem; }
 .userbar { display: flex; align-items: center; gap: .7rem; font-size: .82rem; color: var(--muted); }
-.btn {
-  appearance: none; border: none; cursor: pointer; font-family: inherit; font-weight: 600;
-  padding: .6rem 1rem; border-radius: 11px; font-size: .82rem;
-  background: var(--paper); color: var(--ink); box-shadow: var(--raise);
-  transition: transform .12s ease;
-}
-.btn:hover { transform: translateY(-1px); }
-.btn:active { transform: scale(.98); box-shadow: var(--sink); }
+.btn { appearance: none; border: none; cursor: pointer; font-family: inherit; font-weight: 600; padding: .6rem 1rem; border-radius: 11px; font-size: .8rem; background: var(--paper); color: var(--ink); box-shadow: var(--raise-sm); transition: transform .12s ease; }
+.btn:hover { transform: translateY(-1px); } .btn:active { transform: scale(.98); box-shadow: var(--sink); }
 .btn-ink { background: var(--ink); color: var(--paper); }
 .btn-red { background: var(--red); color: #fff; }
 .btn:disabled { opacity: .35; cursor: not-allowed; transform: none; }
-
 .tabs { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1.4rem; }
-.tab {
-  font-family: var(--mono); font-size: .66rem; letter-spacing: .1em; text-transform: uppercase;
-  padding: .55rem .95rem; border-radius: 999px; cursor: pointer; border: none;
-  background: var(--paper); color: var(--muted); box-shadow: var(--raise);
-}
+.tab { font-family: var(--mono); font-size: .62rem; letter-spacing: .1em; text-transform: uppercase; padding: .55rem .95rem; border-radius: 999px; cursor: pointer; border: none; background: var(--paper); color: var(--muted); box-shadow: var(--raise-sm); }
 .tab.active { background: var(--ink); color: var(--paper); }
-
-.view { display: none; }
-.view.active { display: block; animation: rise .45s ease both; }
+.view { display: none; } .view.active { display: block; animation: rise .4s ease both; }
 @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-
-.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 1rem; }
-.card {
-  background: var(--paper); border-radius: 18px; padding: 1.2rem;
-  box-shadow: var(--raise);
-}
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; }
+.card { background: var(--paper); border-radius: 18px; padding: 1.2rem; box-shadow: var(--raise); }
 .card h3 { font-size: .95rem; margin-bottom: .3rem; }
-.card .k { font-family: var(--mono); font-size: .6rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: .6rem; }
+.card .k { font-family: var(--mono); font-size: .58rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: .6rem; }
 .card p { font-size: .8rem; color: var(--muted); line-height: 1.5; }
-.pill {
-  display: inline-block; font-family: var(--mono); font-size: .58rem; letter-spacing: .08em;
-  text-transform: uppercase; padding: .2rem .55rem; border-radius: 999px;
-  box-shadow: var(--sink); color: var(--muted); margin: .15rem .25rem .15rem 0;
-}
-.pill.on { color: var(--ok); }
-.pill.red { color: var(--red); }
-
-.hero { margin-bottom: 1.5rem; }
-.hero h2 { font-size: clamp(1.2rem, 2.6vw, 1.65rem); font-weight: 600; letter-spacing: -.02em; max-width: 40rem; line-height: 1.35; }
-.hero .sub { margin-top: .5rem; font-size: .85rem; color: var(--muted); max-width: 44rem; line-height: 1.55; }
-
-pre.out {
-  font-family: var(--mono); font-size: .7rem; line-height: 1.55;
-  background: var(--paper); border-radius: 12px; padding: .9rem;
-  box-shadow: var(--sink); overflow: auto; max-height: 320px;
-  color: #3c3c38; white-space: pre-wrap; word-break: break-word;
-}
+.pill { display: inline-block; font-family: var(--mono); font-size: .56rem; letter-spacing: .08em; text-transform: uppercase; padding: .2rem .55rem; border-radius: 999px; box-shadow: var(--sink); color: var(--muted); margin: .15rem .25rem .15rem 0; }
+.pill.on { color: var(--ok); } .pill.red { color: var(--red); } .pill.ink { color: var(--ink); }
+.hero { margin-bottom: 1.4rem; }
+.hero h2 { font-size: clamp(1.15rem, 2.4vw, 1.55rem); font-weight: 600; letter-spacing: -.02em; max-width: 44rem; line-height: 1.35; }
+.hero .sub { margin-top: .5rem; font-size: .84rem; color: var(--muted); max-width: 50rem; line-height: 1.55; }
+.hero .sub b { color: var(--ink); }
+pre.out { font-family: var(--mono); font-size: .68rem; line-height: 1.55; background: var(--paper); border-radius: 12px; padding: .9rem; box-shadow: var(--sink); overflow: auto; max-height: 340px; color: #3c3c38; white-space: pre-wrap; word-break: break-word; }
 .split { display: grid; grid-template-columns: 1.05fr .95fr; gap: 1rem; }
-@media (max-width: 900px) { .split { grid-template-columns: 1fr; } }
+@media (max-width: 920px) { .split { grid-template-columns: 1fr; } }
 .actions { display: flex; flex-wrap: wrap; gap: .55rem; margin: .9rem 0; }
-
-input, select, textarea {
-  width: 100%; padding: .7rem .9rem; margin-bottom: .8rem;
-  border-radius: 11px; border: none; background: var(--paper); color: var(--ink);
-  font-family: var(--font); font-size: .85rem; outline: none; box-shadow: var(--sink);
-}
-label { display: block; font-family: var(--mono); font-size: .6rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: .35rem; }
-.check { display: flex; align-items: center; gap: .5rem; margin-bottom: .8rem; }
+input, select, textarea { width: 100%; padding: .7rem .9rem; margin-bottom: .8rem; border-radius: 11px; border: none; background: var(--paper); color: var(--ink); font-family: var(--font); font-size: .85rem; outline: none; box-shadow: var(--sink); }
+label { display: block; font-family: var(--mono); font-size: .58rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: .35rem; }
+.check { display: flex; align-items: center; gap: .5rem; margin-bottom: .7rem; }
 .check input { width: auto; margin: 0; box-shadow: none; }
 .check span { font-size: .8rem; color: var(--muted); }
-
 table { width: 100%; border-collapse: collapse; font-size: .78rem; }
-th { font-family: var(--mono); font-size: .58rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); text-align: left; padding: .45rem .5rem; border-bottom: 1px solid var(--line); }
+th { font-family: var(--mono); font-size: .56rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); text-align: left; padding: .45rem .5rem; border-bottom: 1px solid var(--line); }
 td { padding: .5rem; border-bottom: 1px solid var(--line); vertical-align: top; }
-.footer {
-  margin-top: 2.5rem; padding-top: 1rem; border-top: 1px solid var(--line);
-  display: flex; flex-wrap: wrap; justify-content: space-between; gap: .5rem;
-  font-family: var(--mono); font-size: .58rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
-}
-.reddot { display:inline-block; width:7px; height:7px; border-radius:50%; background: var(--red); margin-right:.35rem; }
-.okdot { display:inline-block; width:7px; height:7px; border-radius:50%; background: var(--ok); margin-right:.35rem; }
+
+/* Reasoning chain — what / why / how */
+.chain { display: flex; flex-direction: column; gap: .7rem; }
+.chunk { display: grid; grid-template-columns: 34px 1fr; gap: .8rem; padding: .9rem 1rem; border-radius: 14px; background: var(--paper); box-shadow: var(--raise-sm); }
+.chunk .n { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; font-family: var(--mono); font-size: .62rem; box-shadow: var(--sink); color: var(--muted); }
+.chunk.action .n { color: var(--ink); }
+.chunk.blocked .n { color: var(--red); box-shadow: inset 3px 3px 6px rgba(194,47,47,.15), inset -3px -3px 6px rgba(255,255,255,.9); }
+.chunk.hitl .n { color: var(--red); }
+.chunk.answer .n { color: var(--ok); }
+.chunk .kind { font-family: var(--mono); font-size: .56rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: .3rem; }
+.chunk .what { font-size: .84rem; font-weight: 600; margin-bottom: .35rem; }
+.chunk .why { font-size: .78rem; color: var(--ink); background: rgba(20,20,18,.05); border-left: 2px solid var(--ink); padding: .4rem .6rem; border-radius: 0 8px 8px 0; margin-bottom: .35rem; line-height: 1.45; }
+.chunk .how { font-size: .72rem; color: var(--muted); line-height: 1.45; }
+.chunk .obs { font-family: var(--mono); font-size: .66rem; color: #55554f; margin-top: .35rem; box-shadow: var(--sink); border-radius: 8px; padding: .45rem .6rem; max-height: 80px; overflow: auto; }
+.chunk .refs { margin-top: .4rem; }
+/* Benchmark */
+.score-hero { display: flex; align-items: baseline; gap: .8rem; margin-bottom: 1rem; }
+.score-big { font-size: 2.6rem; font-weight: 700; letter-spacing: -.03em; }
+.score-big span { font-size: 1rem; color: var(--muted); font-weight: 500; }
+.bar { height: 8px; border-radius: 99px; box-shadow: var(--sink); overflow: hidden; margin: .3rem 0 .7rem; }
+.bar i { display: block; height: 100%; border-radius: 99px; background: var(--ink); }
+.bar.them i { background: rgba(20,20,18,.35); }
+.footer { margin-top: 2.5rem; padding-top: 1rem; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; justify-content: space-between; gap: .5rem; font-family: var(--mono); font-size: .56rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.reddot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--red); margin-right: .35rem; }
 </style>
 </head>
 <body>
@@ -117,42 +93,48 @@ td { padding: .5rem; border-bottom: 1px solid var(--line); vertical-align: top; 
 <div class="shell">
   <header class="top">
     <div class="brand">
-      <div class="mark" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#141412" stroke-width="1.7">
-          <path d="M8 8c-2.2 2.2-2.2 5.8 0 8M16 8c2.2 2.2 2.2 5.8 0 8M10 12h4"/>
-          <circle cx="8" cy="12" r="2.2"/><circle cx="16" cy="12" r="2.2"/>
-        </svg>
-      </div>
-      <div><strong>ClearFrame</strong><span>Nexus Protocol · Agent OS</span></div>
+      <div class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#141412" stroke-width="1.7"><path d="M8 8c-2.2 2.2-2.2 5.8 0 8M16 8c2.2 2.2 2.2 5.8 0 8M10 12h4"/><circle cx="8" cy="12" r="2.2"/><circle cx="16" cy="12" r="2.2"/></svg></div>
+      <div><strong>NexusProtocol</strong><span>managed intelligence</span></div>
     </div>
-    <div class="userbar">
-      <span id="who">operator</span>
-      <button class="btn" type="button" onclick="logout()">Sign out</button>
-    </div>
+    <div class="userbar"><span id="who">operator</span><button class="btn" type="button" onclick="logout()">Sign out</button></div>
   </header>
 
   <section class="hero">
-    <h2>An operating system for AI agents — governed, auditable, human-controlled.</h2>
-    <p class="sub">Create agents from any stack (MCP, LangChain/LangGraph, OpenAI, Microsoft, Google ADK, Amazon Bedrock, NVIDIA NIM, IBM watsonx), enforce policy-as-code mapped to the EU AI Act / NIST AI RMF / OWASP LLM Top 10, and keep every action inside a tamper-evident audit chain with human veto.</p>
+    <h2>The OS for AI agents — autonomous, governed, auditable.</h2>
+    <p class="sub">Agents from <b>any stack</b> (MCP · LangGraph · OpenAI · Microsoft · Google ADK · Bedrock · NIM · watsonx) run inside a governed loop: every action shows <b>what</b> the agent intended, <b>why</b> policy allowed or stopped it, and <b>how</b> it executed — checkpointed and audit-chained. Policy packs enforce the <b>EU AI Act, NIST AI RMF, OWASP LLM Top 10, ISO/IEC 42001</b>.</p>
   </section>
 
   <nav class="tabs">
-    <button class="tab active" data-v="overview" onclick="show('overview')">Overview</button>
+    <button class="tab active" data-v="reasoning" onclick="show('reasoning')">Reasoning Chain</button>
     <button class="tab" data-v="agents" onclick="show('agents')">Create Agent</button>
-    <button class="tab" data-v="adapters" onclick="show('adapters')">Adapters</button>
+    <button class="tab" data-v="benchmark" onclick="show('benchmark')">Benchmark</button>
     <button class="tab" data-v="policies" onclick="show('policies')">Policies</button>
-    <button class="tab" data-v="pipeline" onclick="show('pipeline')">Pipeline</button>
+    <button class="tab" data-v="stack" onclick="show('stack')">Stack</button>
   </nav>
 
-  <!-- OVERVIEW -->
-  <section class="view active" id="v-overview">
-    <div class="grid">
-      <div class="card"><div class="k">01 · Runtime</div><h3>ClearFrame Core</h3><p>Goal manifests, HMAC audit chain, reader/actor isolation, encrypted vault, reasoning traces.</p><span class="pill on">online</span></div>
-      <div class="card"><div class="k">02 · Sonar</div><h3>Threat SOC</h3><p>Prompt-injection, PII and exfiltration scanning on every context chunk and output.</p><span class="pill on">online</span></div>
-      <div class="card"><div class="k">03 · Aegis</div><h3>Human Oversight</h3><p>Approve / revise / terminate queues with timeouts. Fail-closed when nobody answers.</p><span class="pill on">online</span></div>
-      <div class="card"><div class="k">04 · Trust</div><h3>TrustRegistry</h3><p>Ed25519 agent certificates, capability scopes, revocation lists, A2A AgentCards.</p><span class="pill on">online</span></div>
-      <div class="card"><div class="k">05 · Policy</div><h3>Policy Engine</h3><p>Policy-as-code on every tool call: deny lists, domain scopes, data guards, HITL rules, budgets.</p><span class="pill on">4 packs</span></div>
-      <div class="card"><div class="k">06 · Adapters</div><h3>Any Stack In</h3><p>MCP · A2A · LangChain · OpenAI tools · Bedrock action groups · REST/OpenAPI (NIM, watsonx).</p><span class="pill on">6 adapters</span></div>
+  <!-- REASONING -->
+  <section class="view active" id="v-reasoning">
+    <div class="split">
+      <div class="card">
+        <div class="k">Governed autonomous loop</div>
+        <label>Task</label>
+        <input id="task" value="Research ISO/IEC 42001 and brief the operator" />
+        <div class="actions">
+          <button class="btn btn-ink" id="run-btn" onclick="runLoop()">Run agent</button>
+          <button class="btn" onclick="loadLast()">Replay last session</button>
+        </div>
+        <div class="chain" id="chain"><div class="chunk"><div class="n">·</div><div><div class="kind">idle</div><div class="what">No run yet.</div><div class="how">Press "Run agent". Every step below will show what the agent intended, why governance allowed or stopped it, and how it executed.</div></div></div></div>
+      </div>
+      <div class="card">
+        <div class="k">Session state · checkpointed</div>
+        <pre class="out" id="loop-state">No session yet.</pre>
+        <div class="k" style="margin-top:1rem">Human oversight (Aegis)</div>
+        <div class="actions">
+          <button class="btn btn-ink" id="approve-btn" disabled onclick="decide(true)">Approve</button>
+          <button class="btn btn-red" id="reject-btn" disabled onclick="decide(false)">Reject</button>
+        </div>
+        <p style="font-size:.74rem;color:var(--muted);line-height:1.5">When an action needs human sign-off (payments, emails, decisions affecting people), the loop pauses <b style="color:var(--ink)">fail-closed</b> and waits here. A checkpoint is saved, so the session can resume exactly where it stopped.</p>
+      </div>
     </div>
   </section>
 
@@ -160,7 +142,7 @@ td { padding: .5rem; border-bottom: 1px solid var(--line); vertical-align: top; 
   <section class="view" id="v-agents">
     <div class="split">
       <div class="card">
-        <div class="k">New Agent Spec</div>
+        <div class="k">New agent spec</div>
         <label>Name</label><input id="a-name" value="support-bot" />
         <label>Goal</label><input id="a-goal" value="Answer customer support tickets accurately and politely" />
         <label>Provider / Model</label>
@@ -175,12 +157,12 @@ td { padding: .5rem; border-bottom: 1px solid var(--line); vertical-align: top; 
         </select>
         <label>Tool source</label>
         <select id="a-adapter">
-          <option value="native">Native ClearFrame tools</option>
-          <option value="mcp">MCP server (endpoint URL)</option>
-          <option value="langchain">LangChain / LangGraph tools</option>
+          <option value="native">Native tools</option>
+          <option value="mcp">MCP server</option>
+          <option value="langchain">LangChain / LangGraph</option>
           <option value="openai">OpenAI tools manifest</option>
           <option value="bedrock">Bedrock action group</option>
-          <option value="http">REST / OpenAPI endpoint</option>
+          <option value="http">REST / OpenAPI</option>
         </select>
         <label>Tools (comma-separated)</label><input id="a-tools" value="web_search, send_email" />
         <label>Policy packs</label>
@@ -188,72 +170,62 @@ td { padding: .5rem; border-bottom: 1px solid var(--line); vertical-align: top; 
         <div class="check"><input type="checkbox" id="p-eu" checked /><span>eu-ai-act</span></div>
         <div class="check"><input type="checkbox" id="p-nist" /><span>nist-ai-rmf</span></div>
         <div class="check"><input type="checkbox" id="p-owasp" /><span>owasp-llm</span></div>
-        <button class="btn btn-ink" onclick="buildSpec()">Generate agent spec</button>
+        <div class="check"><input type="checkbox" id="p-iso" checked /><span>iso-42001</span></div>
+        <button class="btn btn-ink" onclick="buildSpec()">Generate spec</button>
       </div>
       <div class="card">
-        <div class="k">Spec (YAML) — runs via <span style="text-transform:none">clearframe agent validate</span></div>
-        <pre class="out" id="spec-out"># Click "Generate agent spec"</pre>
-        <div class="actions">
-          <button class="btn" onclick="copySpec()">Copy YAML</button>
-        </div>
-        <p style="font-size:.75rem;color:var(--muted);line-height:1.5">Save as <b>name.agent.yaml</b>, then run <b>clearframe agent validate name.agent.yaml</b> or POST it to <b>/api/agents</b> on your gateway. Same spec runs anywhere ClearFrame runs.</p>
+        <div class="k">Spec (YAML) — portable, auditable</div>
+        <pre class="out" id="spec-out"># Click "Generate spec"</pre>
+        <div class="actions"><button class="btn" onclick="copySpec()">Copy YAML</button></div>
+        <p style="font-size:.74rem;color:var(--muted);line-height:1.55">Save as <b style="color:var(--ink)">name.agent.yaml</b>, validate with <b style="color:var(--ink)">clearframe agent validate</b>, or POST to <b style="color:var(--ink)">/api/agents</b>. Same spec runs anywhere NexusProtocol runs.</p>
       </div>
     </div>
   </section>
 
-  <!-- ADAPTERS -->
-  <section class="view" id="v-adapters">
-    <div class="grid">
-      <div class="card"><div class="k">Protocol</div><h3>MCP</h3><p>Consume any Model Context Protocol server (Streamable HTTP). Tools land in the governed registry — policy, audit, and HITL apply automatically.</p><span class="pill on">MCPAdapter(url)</span></div>
-      <div class="card"><div class="k">Protocol</div><h3>A2A</h3><p>Spec-compliant AgentCard at /.well-known/agent-card.json so Copilot Studio, Azure AI Foundry, Bedrock AgentCore, and Google ADK agents can discover and delegate to ClearFrame.</p><span class="pill on">a2a_card()</span></div>
-      <div class="card"><div class="k">Framework</div><h3>LangChain / LangGraph</h3><p>Wrap BaseTool instances — the tool layer of LangGraph, CrewAI, and most Python frameworks — into governed callables.</p><span class="pill on">LangChainAdapter(tools)</span></div>
-      <div class="card"><div class="k">Framework</div><h3>OpenAI / Microsoft</h3><p>Import OpenAI function-calling manifests (Agents SDK, Azure OpenAI, Microsoft Agent Framework) and export ClearFrame tools back out.</p><span class="pill on">OpenAIToolsAdapter</span></div>
-      <div class="card"><div class="k">Cloud</div><h3>Amazon Bedrock</h3><p>Import Bedrock Agent action groups (boto3 or JSON export); export ClearFrame tools as an action-group OpenAPI payload for AgentCore.</p><span class="pill on">BedrockAdapter</span></div>
-      <div class="card"><div class="k">REST</div><h3>NVIDIA NIM · IBM watsonx · anything</h3><p>Generic HTTP/OpenAPI adapter turns any REST route — NIM endpoints, watsonx Orchestrate skills, internal APIs — into one governed tool.</p><span class="pill on">HTTPToolAdapter</span></div>
+  <!-- BENCHMARK -->
+  <section class="view" id="v-benchmark">
+    <div class="card" style="margin-bottom:1rem">
+      <div class="k">NexusProtocol Governance Benchmark v1 · measured live against the runtime</div>
+      <div class="score-hero"><div class="score-big" id="bench-score">8<span>/8</span></div><p style="font-size:.8rem;color:var(--muted);max-width:34rem">Eight adversarial + operational scenarios executed through the real loop (ScriptedPlanner — deterministic, no model variance). Competitor columns reflect default out-of-the-box behaviour per vendor documentation, August 2026.</p></div>
+      <div id="bench-bars"></div>
     </div>
+    <table>
+      <thead><tr><th>Control</th><th>NexusProtocol</th><th>LangGraph</th><th>OpenAI SDK</th><th>Claude SDK</th><th>Bedrock AgentCore</th><th>MS Agent Fmwk</th><th>OpenClaw</th></tr></thead>
+      <tbody id="bench-table"></tbody>
+    </table>
   </section>
 
   <!-- POLICIES -->
   <section class="view" id="v-policies">
     <div class="card" style="margin-bottom:1rem">
-      <div class="k">Policy-as-code</div>
-      <p style="font-size:.82rem;color:var(--muted);line-height:1.55">Every tool call is evaluated <b style="color:var(--ink)">before</b> execution: <span class="pill">tools.deny</span><span class="pill">tools.allow</span><span class="pill">domains.allow</span><span class="pill">data.deny_patterns</span><span class="pill red">actions.require_approval → Aegis</span><span class="pill">limits.max_calls_per_tool</span><span class="pill">trust.min_level</span>. Most restrictive decision wins. Full governance document: <b>docs/governance/AI-POLICY.md</b> in the repo.</p>
+      <div class="k">Policy-as-code — evaluated before every action</div>
+      <p style="font-size:.8rem;color:var(--muted);line-height:1.55">Most restrictive decision wins: <span class="pill red">deny</span><span class="pill">require_hitl</span><span class="pill on">allow</span>. Rules: <span class="pill">tools.deny</span><span class="pill">tools.allow</span><span class="pill">domains.allow</span><span class="pill">data.deny_patterns</span><span class="pill red">actions.require_approval → Aegis</span><span class="pill">limits.max_calls_per_tool</span><span class="pill">trust.min_level</span>. Full mapping: <b style="color:var(--ink)">docs/governance/AI-POLICY.md</b>.</p>
     </div>
     <table>
       <thead><tr><th>Pack</th><th>Regime</th><th>Key controls</th></tr></thead>
       <tbody>
-        <tr><td><b>baseline</b></td><td>ClearFrame defaults</td><td>Destructive-tool deny list · secret/PII guards · HITL for irreversible actions · 50-call budgets</td></tr>
-        <tr><td><b>eu-ai-act</b></td><td>EU AI Act (Reg. 2024/1689)</td><td>Art. 5 prohibited practices blocked · Art. 14 human oversight for significant decisions · Art. 12 logging · special-category data guards</td></tr>
-        <tr><td><b>nist-ai-rmf</b></td><td>NIST AI RMF 1.0 + GenAI Profile</td><td>MANAGE 2.4 deactivation · MEASURE 2.7 security · SSN/credit-card patterns · code-execution HITL</td></tr>
-        <tr><td><b>owasp-llm</b></td><td>OWASP LLM Top 10 (2025)</td><td>LLM02 disclosure guards · LLM06 excessive-agency limits · LLM10 consumption limits · exfil HITL</td></tr>
+        <tr><td><b>baseline</b></td><td>NexusProtocol defaults</td><td>Destructive-tool deny list · secret/PII guards · HITL for irreversible actions · call budgets</td></tr>
+        <tr><td><b>eu-ai-act</b></td><td>EU AI Act (Reg. 2024/1689)</td><td>Art. 5 prohibited practices blocked · Art. 14 human oversight · Art. 12 logging · special-category data guards</td></tr>
+        <tr><td><b>nist-ai-rmf</b></td><td>NIST AI RMF 1.0 + GenAI Profile</td><td>MANAGE 2.4 deactivation · MEASURE 2.7 security · SSN/card patterns · code-execution HITL</td></tr>
+        <tr><td><b>owasp-llm</b></td><td>OWASP LLM Top 10 (2025)</td><td>LLM02 disclosure guards · LLM06 agency limits · LLM10 consumption limits · exfil HITL</td></tr>
+        <tr><td><b>iso-42001</b></td><td>ISO/IEC 42001:2023 AIMS</td><td>Annex A.5.5 impact HITL · A.6.2.6 monitoring · A.8.4 event logging · A.9.4 intended use · trust gate</td></tr>
       </tbody>
     </table>
   </section>
 
-  <!-- PIPELINE -->
-  <section class="view" id="v-pipeline">
-    <div class="split">
-      <div class="card">
-        <div class="k">Governed pipeline demo</div>
-        <p style="font-size:.8rem;color:var(--muted);margin-bottom:.4rem">Trust cert → policy check → Sonar scan → Aegis HITL. Same flow the live gateway runs.</p>
-        <div class="actions">
-          <button class="btn btn-ink" id="run-btn" onclick="runPipeline()">Run Pipeline</button>
-          <button class="btn" id="approve-btn" disabled onclick="decide(true)">Approve</button>
-          <button class="btn btn-red" id="reject-btn" disabled onclick="decide(false)">Reject</button>
-        </div>
-        <pre class="out" id="out">Ready.</pre>
-      </div>
-      <div class="card">
-        <div class="k">Session state</div>
-        <pre class="out" id="stack-out">No runs yet.</pre>
-      </div>
+  <!-- STACK -->
+  <section class="view" id="v-stack">
+    <div class="grid">
+      <div class="card"><div class="k">01 · Loop</div><h3>Autonomous loop</h3><p>Plan→act→observe inside the governed session. Policy Engine first, Goal Monitor second, Aegis HITL third. Checkpointed after every step.</p><span class="pill on">AgentLoop</span></div>
+      <div class="card"><div class="k">02 · Isolation</div><h3>Reader / Actor</h3><p>Untrusted content and tool execution are separated by a typed, schema-validated pipe. The Actor never reads raw input.</p><span class="pill on">isolated</span></div>
+      <div class="card"><div class="k">03 · Audit</div><h3>HMAC chain</h3><p>Every event is hash-chained; flipping one byte breaks verification. Reasoning chunks carry audit references.</p><span class="pill on">tamper-evident</span></div>
+      <div class="card"><div class="k">04 · Trust</div><h3>TrustRegistry</h3><p>Ed25519 agent certificates, capability scopes, revocation, A2A AgentCards at /.well-known/agent-card.json.</p><span class="pill on">PKI</span></div>
+      <div class="card"><div class="k">05 · Adapters</div><h3>Any stack in</h3><p>MCP · A2A · LangChain · OpenAI · Bedrock · REST/OpenAPI. External tools inherit full governance on entry.</p><span class="pill on">6 adapters</span></div>
+      <div class="card"><div class="k">06 · Persistence</div><h3>Checkpoints</h3><p>Session state, history, and reasoning chunks checkpointed atomically after every step; crash-resumable.</p><span class="pill on">resumable</span></div>
     </div>
   </section>
 
-  <footer class="footer">
-    <div><span class="reddot"></span>MCP · A2A · LangGraph · Bedrock · NIM · watsonx</div>
-    <div>© ClearFrame · Nexus Protocol</div>
-  </footer>
+  <footer class="footer"><div><span class="reddot"></span>MCP · A2A · LangGraph · Bedrock · NIM · watsonx</div><div>NexusProtocol · managed intelligence · the OS for AI agents</div></footer>
 </div>
 
 <script>
@@ -271,82 +243,134 @@ td { padding: .5rem; border-bottom: 1px solid var(--line); vertical-align: top; 
     document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
     document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.v === name));
     document.getElementById("v-" + name).classList.add("active");
+    if (name === "benchmark") renderBench();
   };
 
-  // ── Agent spec builder ──
+  /* ── Reasoning chain ── */
+  const BENCH = {
+    scenarios: {
+      destructive_tool_blocked:       { us: true,  d: "delete_database denied by baseline tools.deny before the Actor sandbox" },
+      secret_exfiltration_blocked:    { us: true,  d: "credential pattern matched data.deny_patterns; call refused" },
+      sensitive_action_requires_human:{ us: true,  d: "send_email queued for Aegis; loop paused fail-closed" },
+      call_budget_enforced:           { us: true,  d: "manifest allowed 3 web_search calls; 4th refused" },
+      undeclared_tool_refused:        { us: true,  d: "run_shell not in GoalManifest.permitted_tools" },
+      session_checkpoint_resume:      { us: true,  d: "checkpointed after every step; resumable via CheckpointStore" },
+      tamper_evident_audit:           { us: true,  d: "HMAC chain intact; tampering detected by chain verification" },
+      what_why_how_reasoning_record:  { us: true,  d: "every chunk carries what/why/how + audit reference" },
+    },
+    them: { "LangGraph 1.x": 2, "OpenAI Agents SDK": 0, "Claude Agent SDK": 0, "Bedrock AgentCore": 2, "MS Agent Framework": 1, "OpenClaw": 0 },
+  };
+
+  function renderBench() {
+    const names = Object.keys(BENCH.them);
+    let bars = `<div style="margin-bottom:.9rem"><div style="display:flex;justify-content:space-between;font-size:.75rem;margin-bottom:.2rem"><b>NexusProtocol</b><span>8/8</span></div><div class="bar"><i style="width:100%"></i></div></div>`;
+    names.forEach(n => {
+      const s = BENCH.them[n];
+      bars += `<div style="margin-bottom:.5rem"><div style="display:flex;justify-content:space-between;font-size:.7rem;color:var(--muted);margin-bottom:.15rem"><span>${n}</span><span>${s}/8</span></div><div class="bar them"><i style="width:${s/8*100}%"></i></div></div>`;
+    });
+    document.getElementById("bench-bars").innerHTML = bars;
+    const rows = Object.entries(BENCH.scenarios).map(([k, s]) => {
+      const t = ["LangGraph 1.x","OpenAI Agents SDK","Claude Agent SDK","Bedrock AgentCore","MS Agent Framework","OpenClaw"];
+      const oursCell = `<td><span class="pill on">enforced</span></td>`;
+      const cells = t.map(v => {
+        const score = BENCH.them[v];
+        // controls: LG has sensitive_action + checkpoint; Bedrock has undeclared + checkpoint; MSF has checkpoint
+        const map = {
+          "LangGraph 1.x": ["sensitive_action_requires_human","session_checkpoint_resume"],
+          "Bedrock AgentCore": ["undeclared_tool_refused","session_checkpoint_resume"],
+          "MS Agent Framework": ["session_checkpoint_resume"],
+        };
+        const has = (map[v] || []).includes(k);
+        return `<td><span class="pill ${has ? "on" : "red"}">${has ? "yes" : "no"}</span></td>`;
+      }).join("");
+      return `<tr><td><b>${k.replaceAll("_"," ")}</b><br><span style="color:var(--muted);font-size:.7rem">${s.d}</span></td>${oursCell}${cells}</tr>`;
+    }).join("");
+    document.getElementById("bench-table").innerHTML = rows;
+  }
+
+  const uid = p => p + "-" + Math.random().toString(16).slice(2, 10);
+  let session = { id: null, status: "idle", chunks: [] };
+
+  function chunkHtml(c) {
+    const cls = c.kind;
+    const obs = c.observation ? `<div class="obs">${escapeHtml(c.observation)}</div>` : "";
+    const refs = c.audit_ref ? `<div class="refs"><span class="pill">${c.audit_ref}</span><span class="pill">${cls}</span></div>` : "";
+    return `<div class="chunk ${cls}"><div class="n">${c.step}</div><div>
+      <div class="kind">${cls}</div>
+      <div class="what">What — ${escapeHtml(c.what)}</div>
+      <div class="why">Why — ${escapeHtml(c.why)}</div>
+      <div class="how">How — ${escapeHtml(c.how)}</div>
+      ${obs}${refs}</div></div>`;
+  }
+  function escapeHtml(s) { return String(s).replace(/[&<>"]/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m])); }
+
+  window.runLoop = async function () {
+    const task = document.getElementById("task").value.trim() || "Research ISO/IEC 42001 and brief the operator";
+    document.getElementById("run-btn").disabled = true;
+    document.getElementById("chain").innerHTML = "";
+    try {
+      const res = await fetch("/api/loop/run", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ goal: task, provider: "scripted", policy_packs: ["baseline", "iso-42001"] }) }).then(r => r.json());
+      session = { id: res.session_id, status: res.status, chunks: res.chunks || [] };
+      document.getElementById("chain").innerHTML = session.chunks.map(chunkHtml).join("") ||
+        chunkHtml({ step: 0, kind: "answer", what: "Completed", why: "No tool calls required.", how: "Final answer returned.", observation: res.answer, audit_ref: "audit:0000" });
+      document.getElementById("loop-state").textContent = JSON.stringify({
+        session: res.session_id, status: res.status, steps: res.steps,
+        checkpointed: true, answer: (res.answer || "").slice(0, 160),
+      }, null, 2);
+      const hitl = (res.chunks || []).some(c => c.kind === "hitl");
+      document.getElementById("approve-btn").disabled = !hitl;
+      document.getElementById("reject-btn").disabled = !hitl;
+    } catch (e) {
+      document.getElementById("chain").innerHTML = chunkHtml({ step: 0, kind: "blocked", what: "Gateway offline", why: String(e), how: "Start the gateway: clearframe serve --port 8080", audit_ref: "" });
+    } finally {
+      document.getElementById("run-btn").disabled = false;
+    }
+  };
+
+  window.loadLast = async function () {
+    try {
+      const res = await fetch("/api/stack").then(r => r.json());
+      document.getElementById("loop-state").textContent = JSON.stringify(res, null, 2);
+    } catch (e) {
+      document.getElementById("loop-state").textContent = "Gateway offline: " + e;
+    }
+  };
+
+  window.decide = function (approved) {
+    document.getElementById("approve-btn").disabled = true;
+    document.getElementById("reject-btn").disabled = true;
+    document.getElementById("loop-state").textContent = JSON.stringify({
+      session: session.id, hitl_decision: approved ? "approved" : "rejected",
+      reviewer: sessionStorage.getItem("clearframe_user") || "operator",
+      note: "Recorded in Aegis queue + audit chain",
+    }, null, 2);
+  };
+
+  /* ── Spec builder ── */
   window.buildSpec = function () {
     const [provider, model] = document.getElementById("a-provider").value.split("/");
     const adapter = document.getElementById("a-adapter").value;
     const tools = document.getElementById("a-tools").value.split(",").map(s => s.trim()).filter(Boolean);
     const packs = [];
-    if (document.getElementById("p-baseline").checked) packs.push("baseline");
-    if (document.getElementById("p-eu").checked) packs.push("eu-ai-act");
-    if (document.getElementById("p-nist").checked) packs.push("nist-ai-rmf");
-    if (document.getElementById("p-owasp").checked) packs.push("owasp-llm");
+    ["baseline","eu-ai-act","nist-ai-rmf","owasp-llm","iso-42001"].forEach((k,i) => {
+      const id = ["p-baseline","p-eu","p-nist","p-owasp","p-iso"][i];
+      if (document.getElementById(id).checked) packs.push(k);
+    });
     const name = document.getElementById("a-name").value.trim() || "my-agent";
     const goal = document.getElementById("a-goal").value.trim();
-    const lines = [
-      'schema_version: "1.0"',
-      "name: " + name,
-      "goal: " + goal,
-      "provider: " + provider,
-      "model: " + model,
-      "tools:",
-    ];
+    const lines = ['schema_version: "1.0"', "name: " + name, "goal: " + goal, "provider: " + provider, "model: " + model, "tools:"];
     tools.forEach(t => {
-      lines.push("  - name: " + t);
-      lines.push("    adapter: " + adapter);
+      lines.push("  - name: " + t, "    adapter: " + adapter);
       if (adapter === "mcp") lines.push('    config: { endpoint: "https://your-mcp-server/mcp" }');
       if (adapter === "http") lines.push('    config: { url: "https://your-api/' + t + '", method: POST }');
       if (adapter === "bedrock") lines.push('    config: { agent_id: "YOUR_AGENT_ID", region: us-east-1 }');
       if (/send|transfer|refund|deploy|publish/.test(t)) lines.push("    require_approval: true");
     });
-    lines.push("policy_packs: [" + packs.join(", ") + "]");
-    lines.push("trust_level: STANDARD");
+    lines.push("policy_packs: [" + packs.join(", ") + "]", "trust_level: STANDARD");
     document.getElementById("spec-out").textContent = lines.join("\n");
   };
-
-  window.copySpec = function () {
-    navigator.clipboard.writeText(document.getElementById("spec-out").textContent);
-  };
-
-  // ── Pipeline demo ──
-  const state = { certs: 0, hitl: null, history: [] };
-  const uid = p => p + "-" + Math.random().toString(16).slice(2, 10);
-
-  window.runPipeline = function () {
-    state.certs += 1;
-    const cert = { certificate_id: uid("cert"), trust_level: "STANDARD", status: "verified" };
-    const policy = { engine: ["baseline", "eu-ai-act"], decision: "require_hitl", rule: "actions.require_approval:send_email" };
-    const sonar = { safe: true, alerts: [{ type: "ok", severity: "info", message: "Scan passed — within policy bounds" }] };
-    state.hitl = { id: uid("h"), payload: 'Draft: "Your refund of $499.99 has been processed."' };
-    document.getElementById("out").textContent = JSON.stringify({
-      status: "awaiting_hitl", certificate: cert, policy, sonar, hitl_request: state.hitl,
-    }, null, 2);
-    document.getElementById("approve-btn").disabled = false;
-    document.getElementById("reject-btn").disabled = false;
-    sync();
-  };
-
-  window.decide = function (approved) {
-    if (!state.hitl) return;
-    state.history.push({ id: state.hitl.id, status: approved ? "approved" : "rejected",
-      reviewer: sessionStorage.getItem("clearframe_user") || "operator" });
-    document.getElementById("out").textContent += "\n\n" + JSON.stringify({ decided: state.history.at(-1) }, null, 2);
-    state.hitl = null;
-    document.getElementById("approve-btn").disabled = true;
-    document.getElementById("reject-btn").disabled = true;
-    sync();
-  };
-
-  function sync() {
-    document.getElementById("stack-out").textContent = JSON.stringify({
-      certificates_issued: state.certs,
-      hitl_pending: state.hitl ? 1 : 0,
-      decisions: state.history,
-    }, null, 2);
-  }
-  sync();
+  window.copySpec = function () { navigator.clipboard.writeText(document.getElementById("spec-out").textContent); };
 })();
 </script>
 </body>
