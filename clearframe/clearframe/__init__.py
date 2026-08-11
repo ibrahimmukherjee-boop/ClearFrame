@@ -7,7 +7,7 @@ from clearframe.core.config   import ClearFrameConfig
 from clearframe.core.manifest import GoalManifest
 from clearframe.core.session  import AgentSession
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 __all__     = ["ClearFrameConfig", "GoalManifest", "AgentSession", "__version__"]
 
 # ── Optional TrustRegistry integration ───────────────────────────────────────

@@ -242,6 +242,82 @@ def create_gateway() -> FastAPI:
             raise HTTPException(status_code=r.status_code, detail=r.text)
         return {"status": "decided", "result": r.json()}
 
+    # ── Agents API — create agents from portable specs ────────────────────
+
+    AGENTS_DIR = NEXUS_HOME / "agents"
+    AGENTS_DIR.mkdir(parents=True, exist_ok=True)
+
+    @app.get("/api/agents")
+    def list_agents() -> list[dict]:
+        from clearframe.agents import load_spec
+
+        out = []
+        for f in sorted(AGENTS_DIR.glob("*.agent.yaml")):
+            try:
+                spec = load_spec(f)
+                out.append({
+                    "name": spec.name,
+                    "goal": spec.goal,
+                    "provider": spec.provider,
+                    "model": spec.model,
+                    "tools": [t.name for t in spec.tools],
+                    "adapters": sorted({t.adapter for t in spec.tools}),
+                    "policy_packs": spec.policy_packs,
+                    "trust_level": spec.trust_level,
+                })
+            except Exception as exc:
+                out.append({"name": f.stem, "error": str(exc)})
+        return out
+
+    @app.post("/api/agents")
+    def create_agent(payload: dict = Body(...)) -> dict:
+        from clearframe.agents.spec import AgentSpec
+        from clearframe.policy import PolicyEngine, PolicyError
+
+        try:
+            spec = AgentSpec.model_validate(payload)
+            PolicyEngine.with_packs(*spec.policy_packs)  # validate packs exist
+        except PolicyError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+        except Exception as exc:
+            raise HTTPException(status_code=422, detail=f"Invalid agent spec: {exc}")
+        path = AGENTS_DIR / f"{spec.name}.agent.yaml"
+        spec.save(path)
+        return {"status": "created", "name": spec.name, "path": str(path)}
+
+    @app.get("/api/policies")
+    def list_policies() -> list[dict]:
+        from clearframe.policy import load_pack, packaged_packs
+
+        packs = []
+        for name, path in packaged_packs().items():
+            pack = load_pack(path)
+            packs.append({
+                "name": name,
+                "title": pack.get("title", ""),
+                "version": pack.get("version", ""),
+                "description": pack.get("description", "").strip(),
+                "references": pack.get("references", []),
+                "rules": pack.get("rules", {}),
+            })
+        return packs
+
+    @app.get("/.well-known/agent-card.json")
+    def agent_card(request: Request) -> dict:
+        from clearframe.adapters import a2a_card
+
+        return a2a_card(
+            name="ClearFrame Gateway",
+            description="Governed agent runtime — Nexus Protocol",
+            url=_public_url(request),
+            version="0.4.0",
+            skills=[{
+                "id": "governed-execution",
+                "name": "Governed tool execution",
+                "description": "Execute tool calls under goal manifests, policy packs, Sonar scanning, and Aegis human oversight.",
+            }],
+        )
+
     @app.get("/api/stack")
     async def stack() -> dict:
         base = _loopback()

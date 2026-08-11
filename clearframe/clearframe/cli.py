@@ -142,6 +142,52 @@ def rtl_replay(
         console.print(f"\n[green]✓ All {len(steps)} reasoning steps verified.[/green]")
 
 
+# ── agent ─────────────────────────────────────────────────────────────────────
+
+agent_app = typer.Typer(help="Create and validate governed agents from specs.")
+app.add_typer(agent_app, name="agent")
+
+
+@agent_app.command("new")
+def agent_new(
+    name: str = typer.Argument(..., help="Agent name."),
+    out: Path = typer.Option(None, help="Output path (default: ./<name>.agent.yaml)."),
+) -> None:
+    """Scaffold a new agent spec (YAML) anyone can edit and run."""
+    from clearframe.agents import TEMPLATE
+
+    spec = TEMPLATE.model_copy(update={"name": name})
+    path = out or Path(f"{name}.agent.yaml")
+    spec.save(path)
+    console.print(f"[green]✓[/green] Agent spec written → [cyan]{path}[/cyan]")
+    console.print("  Edit the spec, then: [dim]clearframe agent validate " + str(path) + "[/dim]")
+
+
+@agent_app.command("validate")
+def agent_validate(path: Path = typer.Argument(..., help="Path to .agent.yaml")) -> None:
+    """Validate an agent spec and its policy packs."""
+    from clearframe.agents import load_spec
+    from clearframe.policy import PolicyEngine
+
+    spec = load_spec(path)
+    engine = PolicyEngine.with_packs(*spec.policy_packs)
+    console.print(f"[green]✓[/green] Spec [bold]{spec.name}[/bold] is valid.")
+    console.print(f"  Goal:      {spec.goal}")
+    console.print(f"  Tools:     {[t.name for t in spec.tools]}")
+    console.print(f"  Policies:  {engine.pack_names}")
+    console.print(f"  Trust:     {spec.trust_level}")
+
+
+@agent_app.command("packs")
+def agent_packs() -> None:
+    """List available policy packs."""
+    from clearframe.policy import packaged_packs, load_pack
+
+    for name, path in packaged_packs().items():
+        pack = load_pack(path)
+        console.print(f"  [cyan]{name:14}[/cyan] {pack.get('title', '')}")
+
+
 # ── vault ─────────────────────────────────────────────────────────────────────
 
 vault_app = typer.Typer(help="Manage the ClearFrame credential vault.")
