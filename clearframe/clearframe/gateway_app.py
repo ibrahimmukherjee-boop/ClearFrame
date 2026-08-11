@@ -18,7 +18,7 @@ from pydantic import BaseModel
 
 WEB_DIR = Path(__file__).resolve().parent / "web" / "static"
 NEXUS_HOME = Path(os.getenv("NEXUS_HOME", Path.home() / ".nexus"))
-PORT = int(os.getenv("CLEARFRAME_PORT", os.getenv("NEXUS_PORT", "8080")))
+PORT = int(os.getenv("CLEARFRAME_PORT", os.getenv("NEXUS_PORT", os.getenv("PORT", "8080"))))
 HOST = os.getenv("CLEARFRAME_HOST", os.getenv("NEXUS_HOST", "0.0.0.0"))
 PUBLIC_HOST = os.getenv("CLEARFRAME_PUBLIC_HOST", os.getenv("NEXUS_PUBLIC_HOST", ""))
 DEMO_MODE = os.getenv("CLEARFRAME_DEMO", "1") != "0"  # no auth by default

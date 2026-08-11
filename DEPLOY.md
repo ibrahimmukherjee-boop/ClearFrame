@@ -1,42 +1,37 @@
-# Deploy ClearFrame (Nexus Protocol)
+# Deploy NexusProtocol
 
-## Exact webpage
+**One container, one URL, the whole stack — no AWS.**
 
-```
-http://YOUR-EC2-PUBLIC-IP:8080/
-```
+The `clearframe serve` gateway runs the runtime and serves the operator console
+plus TrustRegistry, Sonar, Aegis, agent creation, policies, and the governance
+benchmark — all same-origin, so nothing to misconfigure.
 
-## Login details
+## Fastest path — Render (free, permanent HTTPS)
 
-**None.** Demo mode ships with authentication disabled.
+1. Push this repo to GitHub.
+2. Render → New → **Blueprint** → pick the repo (it reads `render.yaml`).
+3. Open the URL. Done — login is off in demo mode.
 
-| Field | Value |
-|-------|--------|
-| Username | — |
-| Password | — |
-| Token | — |
+## Other no-AWS options
 
-## EC2 install
+| Platform | Config | Notes |
+|----------|--------|-------|
+| Hugging Face Spaces | `deploy/huggingface-space-README.md` | free, Docker SDK, `app_port: 8080` |
+| Fly.io | `fly.toml` | global edge, tiny always-on VM |
+| Railway | auto-detects `Dockerfile` | injects `$PORT` |
+| Any VPS / laptop | `docker compose up --build -d` | → http://localhost:8080 |
 
-```bash
-git clone -b cursor/nexus-sandbox-demo-be86 \
-  https://github.com/ibrahimmukherjee-boop/ClearFrame.git
-cd ClearFrame
-bash clearframe/deploy/install-ec2.sh
-```
+Full walkthrough and architecture diagram: [`deploy/DEPLOY.md`](deploy/DEPLOY.md).
 
-Open security group port **8080**.
+## Login
 
-## Docker
-
-```bash
-docker compose up --build -d
-```
+Demo mode (default) has **no login**. Set `CLEARFRAME_DEMO=0` to require a
+bearer token (written to `~/.clearframe/gateway-token`).
 
 ## Health check
 
 ```bash
-curl -s http://127.0.0.1:8080/health | python3 -m json.tool
+curl -s https://YOUR-URL/health | python3 -m json.tool
 ```
 
-Expect `"auth_required": false` and all services `"ok": true`.
+Expect `"status": "ok"` with all four services `"ok": true`.

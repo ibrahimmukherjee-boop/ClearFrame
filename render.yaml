@@ -1,0 +1,22 @@
+# NexusProtocol — Render Blueprint (no AWS, permanent HTTPS URL)
+# Deploy: push repo to GitHub → Render → New → Blueprint → pick this repo.
+# Render builds the Dockerfile and runs the full stack as one web service.
+services:
+  - type: web
+    name: nexusprotocol
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: CLEARFRAME_DEMO
+        value: "1"
+      - key: NEXUS_HOME
+        value: /data/nexus
+    # Render injects $PORT; the container CMD binds it automatically.
+    disk:
+      name: nexus-data
+      mountPath: /data/nexus
+      sizeGB: 1
