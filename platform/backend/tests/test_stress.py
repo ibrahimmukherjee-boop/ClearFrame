@@ -39,7 +39,9 @@ def req(method: str, path: str, body: dict | None = None, token: str | None = No
 
 
 def login() -> str:
-    code, data = req("POST", "/api/auth/login", {"email": "admin@erasys.local", "password": "admin"})
+    email = os.environ.get("STRESS_ADMIN_EMAIL", "admin@erasys.local")
+    password = os.environ.get("STRESS_ADMIN_PASSWORD", os.environ.get("CLEARFRAME_ADMIN_PASSWORD", "admin"))
+    code, data = req("POST", "/api/auth/login", {"email": email, "password": password})
     assert code == 200, f"Login failed: {code} {data}"
     return data["accessToken"]
 
