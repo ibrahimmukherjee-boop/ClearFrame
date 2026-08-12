@@ -1,25 +1,31 @@
+# NexusProtocol / ClearFrame — local & VPS deploy (no AWS)
+# Builds the enterprise app in platform/ (React SPA + FastAPI, one image).
 services:
-  clearframe:
+  nexusprotocol:
     build:
-      context: .
+      context: ./platform
       dockerfile: Dockerfile
-    image: nexusprotocol:0.5.0
+    image: nexusprotocol:enterprise
     ports:
       - "8080:8080"
     environment:
-      CLEARFRAME_DEMO: "1"
-      CLEARFRAME_HOST: "0.0.0.0"
-      CLEARFRAME_PORT: "8080"
-      NEXUS_HOME: "/data/nexus"
+      CLEARFRAME_API_HOST: "0.0.0.0"
+      CLEARFRAME_API_PORT: "8080"
+      CLEARFRAME_AUTH: "true"
+      CLEARFRAME_DATA_DIR: "/data"
+      CLEARFRAME_RELOAD: "false"
+      # Set a real admin password (else dev seeds admin/admin):
+      CLEARFRAME_ADMIN_PASSWORD: "${CLEARFRAME_ADMIN_PASSWORD:-}"
+      USE_OLLAMA: "false"
     volumes:
-      - nexus-data:/data/nexus
+      - nexus-data:/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/api/health"]
       interval: 15s
       timeout: 5s
       retries: 5
-      start_period: 15s
+      start_period: 20s
 
 volumes:
   nexus-data:
