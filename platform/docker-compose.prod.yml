@@ -1,0 +1,107 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    env_file:
+      - .env.production
+    environment:
+      POSTGRES_DB: clearframe
+      POSTGRES_USER: clearframe
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U clearframe"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - clearframe
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    networks:
+      - clearframe
+
+  clearframe-stack:
+    image: clearframe-stack:latest
+    build: .
+    env_file:
+      - .env.production
+    expose:
+      - "8080"
+    environment:
+      CLEARFRAME_API_HOST: 0.0.0.0
+      CLEARFRAME_API_PORT: 8080
+      CLEARFRAME_DATA_DIR: /data
+      CLEARFRAME_AUTH: "true"
+      CLEARFRAME_ENV: production
+      CLEARFRAME_JWT_SECRET: ${CLEARFRAME_JWT_SECRET:?required}
+      CLEARFRAME_VAULT_PASSPHRASE: ${CLEARFRAME_VAULT_PASSPHRASE:?required}
+      CLEARFRAME_AUDIT_SECRET: ${CLEARFRAME_AUDIT_SECRET:?required}
+      CLEARFRAME_ADMIN_PASSWORD: ${CLEARFRAME_ADMIN_PASSWORD:?required}
+      CLEARFRAME_CORS: ${CLEARFRAME_CORS:-https://localhost}
+      USE_CLEARFRAME_RUNTIME: "true"
+      USE_CLEARFRAME_OPS: "true"
+      USE_OLLAMA: ${USE_OLLAMA:-false}
+      OLLAMA_HOST: ${OLLAMA_HOST:-http://ollama:11434}
+      DATABASE_URL: postgresql://clearframe:${POSTGRES_PASSWORD}@postgres:5432/clearframe
+      REDIS_URL: redis://redis:6379/0
+      OIDC_ISSUER: ${OIDC_ISSUER:-}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      OIDC_REDIRECT_URI: ${OIDC_REDIRECT_URI:-}
+    volumes:
+      - clearframe-data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    networks:
+      - clearframe
+
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ["llm"]
+    volumes:
+      - ollama-data:/root/.ollama
+    restart: unless-stopped
+    networks:
+      - clearframe
+
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./docker/certs:/etc/nginx/certs:ro
+      - certbot-webroot:/var/www/certbot:ro
+    depends_on:
+      clearframe-stack:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - clearframe
+
+volumes:
+  clearframe-data:
+  pg-data:
+  redis-data:
+  ollama-data:
+  certbot-webroot:
+
+networks:
+  clearframe:
+    driver: bridge

@@ -1,0 +1,35 @@
+name: iso-42001
+title: ISO/IEC 42001:2023 — AI Management System Operational Controls
+version: "1.0"
+description: >
+  Operational controls mapped to ISO/IEC 42001 (AI management systems) and
+  its Annex A control set. Organisational clauses (context, leadership,
+  planning) live in docs/governance/AI-POLICY.md; this pack enforces the
+  runtime-enforceable controls on every tool call.
+references:
+  - "ISO 42001 Clause 8 (Operation): operational planning and control — Policy Engine gate on every call"
+  - "Annex A.6.2.6 (AI system operation and monitoring): Goal Monitor + Sonar continuous monitoring"
+  - "Annex A.8.4 (System documentation & event logging): HMAC audit chain + RTL traces"
+  - "Annex A.9.4 (Intended use of the AI system): GoalManifest lock enforces declared purpose"
+  - "Annex A.5.5 (AI system impact assessment): HITL for actions affecting individuals"
+rules:
+  actions:
+    require_approval:
+      # A.5.5 / A.9.3 — decisions with impact on individuals or society need
+      # documented human oversight before execution.
+      - "*_decision"
+      - "send_*"
+      - "publish_*"
+      - "transfer_*"
+      - "delete_account*"
+      - "profile_*"
+  data:
+    deny_patterns:
+      - label: personal-identifier-bulk
+        pattern: "([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}.*){3,}"
+      - label: credential-material
+        pattern: "(-----BEGIN|api[_-]?key\\s*[:=]|secret\\s*[:=])"
+  limits:
+    max_calls_per_tool: 60
+  trust:
+    min_level: STANDARD

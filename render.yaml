@@ -1,0 +1,40 @@
+# NexusProtocol / ClearFrame — Render Blueprint (no AWS, permanent HTTPS URL)
+#
+# The enterprise app in platform/ builds the React frontend and the FastAPI
+# backend into ONE image: the backend serves the SPA at / and the API at /api.
+# Deploy: GitHub -> Render -> New -> Blueprint -> pick this repo.
+#
+# This blueprint runs a secure single-container deploy on SQLite (persistent
+# disk). For a Postgres-backed production deploy, see platform/README and set
+# CLEARFRAME_ENV=production + DATABASE_URL.
+services:
+  - type: web
+    name: nexusprotocol
+    runtime: docker
+    dockerfilePath: ./platform/Dockerfile
+    dockerContext: ./platform
+    plan: standard
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: CLEARFRAME_AUTH
+        value: "true"
+      - key: CLEARFRAME_DATA_DIR
+        value: /data
+      # Allow the GitHub Pages / Vercel frontend to call this backend
+      # cross-origin. Add your Vercel domain here too if you use one.
+      - key: CLEARFRAME_CORS
+        value: "https://ibrahimmukherjee-boop.github.io"
+      # Generated once by Render and kept stable — never the insecure defaults.
+      - key: CLEARFRAME_JWT_SECRET
+        generateValue: true
+      - key: CLEARFRAME_VAULT_PASSPHRASE
+        generateValue: true
+      - key: CLEARFRAME_AUDIT_SECRET
+        generateValue: true
+      - key: CLEARFRAME_ADMIN_PASSWORD
+        generateValue: true
+    disk:
+      name: nexus-data
+      mountPath: /data
+      sizeGB: 1

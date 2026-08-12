@@ -1,0 +1,101 @@
+@import "tailwindcss";
+
+@theme inline {
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+}
+
+@layer base {
+  :root {
+    --background: 222 47% 5%;
+    --foreground: 0 0% 98%;
+    --card: 222 47% 7%;
+    --card-foreground: 0 0% 98%;
+    --popover: 222 47% 7%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 227 82% 59%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 222 30% 12%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 222 30% 12%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 168 100% 42%;
+    --accent-foreground: 222 47% 5%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 217 19% 27%;
+    --input: 217 19% 27%;
+    --ring: 227 82% 59%;
+    --radius: 0.625rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    /* Ethereal grayscale mist — soft light pools drifting over the near-black
+       base (design cue: misty monochrome gradients + depth). */
+    background-image:
+      radial-gradient(55% 45% at 18% 12%, rgba(226, 232, 240, 0.07), transparent 62%),
+      radial-gradient(50% 42% at 84% 78%, rgba(203, 213, 225, 0.06), transparent 60%),
+      radial-gradient(42% 40% at 62% 38%, rgba(148, 163, 184, 0.05), transparent 62%);
+    background-attachment: fixed;
+  }
+
+  /* Fine film grain over everything — the poster-grain texture from the cues.
+     Very low opacity so it reads as texture, never washing out text. */
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    pointer-events: none;
+    opacity: 0.035;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 220 220' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+}
+
+@layer components {
+  /* Glassmorphic surface — frosted depth used by the Goal Monitor panels. */
+  .glass-panel {
+    background: linear-gradient(160deg, rgba(148, 163, 184, 0.08), rgba(15, 23, 42, 0.35));
+    border: 1px solid rgba(226, 232, 240, 0.10);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    box-shadow: 0 18px 50px -24px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+  /* Soft alignment meter track + fill (grayscale gradient, no hard colors). */
+  .align-track {
+    background: rgba(226, 232, 240, 0.08);
+    border-radius: 9999px;
+    overflow: hidden;
+  }
+  .align-fill {
+    background: linear-gradient(90deg, rgba(148, 163, 184, 0.55), rgba(226, 232, 240, 0.95));
+    height: 100%;
+    border-radius: 9999px;
+    transition: width 700ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+}
