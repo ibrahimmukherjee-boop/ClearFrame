@@ -1,7 +1,7 @@
 export type AgentStatus = 'active' | 'suspended' | 'revoked'
 export type CertTrustLevel = 'SANDBOX' | 'RESTRICTED' | 'STANDARD' | 'ELEVATED' | 'CRITICAL'
 export type ToolCallStatus = 'pending' | 'pending_approval' | 'allowed' | 'blocked' | 'human_review' | 'overridden'
-export type AuditStatus = 'allowed' | 'blocked' | 'flagged'
+export type AuditStatus = 'allowed' | 'blocked' | 'flagged' | 'human_review' | 'timeout'
 export type SessionStatus = 'pending' | 'approved' | 'running' | 'terminated' | 'denied'
 export type ThreatSeverity = 'low' | 'medium' | 'high' | 'critical'
 export type ThreatType = 'anomaly' | 'policy_violation' | 'credential_abuse' | 'insider_threat' | 'drift'

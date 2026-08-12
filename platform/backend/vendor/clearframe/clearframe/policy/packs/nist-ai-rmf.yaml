@@ -1,0 +1,26 @@
+name: nist-ai-rmf
+title: NIST AI RMF 1.0 — Manage Function Controls
+version: "1.0"
+description: >
+  Controls mapped to the NIST AI Risk Management Framework (AI 100-1) and the
+  Generative AI Profile (NIST-AI-600-1). GOVERN and MAP are organisational;
+  this pack operationalises MEASURE and MANAGE for agent tool calls.
+references:
+  - "MANAGE 2.4: mechanisms to sustain value + deactivate on risk (Goal Monitor auto-pause)"
+  - "MEASURE 2.7: AI system security and resilience (Sonar threat detection)"
+  - "GOVERN 1.4: audit trails and transparency (audit chain)"
+rules:
+  actions:
+    require_approval:
+      - "execute_code"
+      - "run_shell"
+      - "write_file"
+      - "*_production*"
+  data:
+    deny_patterns:
+      - label: us-ssn
+        pattern: "\\b\\d{3}-\\d{2}-\\d{4}\\b"
+      - label: credit-card
+        pattern: "\\b(?:\\d[ -]*?){13,16}\\b"
+  limits:
+    max_calls_per_tool: 100

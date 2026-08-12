@@ -1,203 +1,156 @@
-# ClearFrame
+# NexusProtocol
 
-> The open-source AI agent protocol built for auditability, safety, and control.
+> **Managed intelligence — the OS for AI agents.**
 
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://python.org)
-[![Status](https://img.shields.io/badge/status-alpha-orange.svg)]()
+NexusProtocol is an open-source agent operating system: agents from **any
+stack** (MCP · LangGraph · OpenAI Agents SDK · Microsoft Agent Framework ·
+Google ADK · Amazon Bedrock · NVIDIA NIM · IBM watsonx) run inside a governed,
+autonomous loop where every action is policy-checked, alignment-scored,
+threat-scanned, and written to a tamper-evident audit chain — with humans in
+command.
 
-ClearFrame is a drop-in alternative to OpenClaw and MCP that puts **you** in control of your AI agents. Every tool call is scored for alignment, every reasoning step is captured, every credential is encrypted, and every action is logged to a tamper-evident audit trail.
+| Layer | Component | Role |
+|-------|-----------|------|
+| 01 Loop | **Autonomous loop** | plan→act→observe with what/why/how reasoning chunks |
+| 02 Policy | **Policy Engine** | policy-as-code: EU AI Act, NIST AI RMF, OWASP LLM, ISO 42001 |
+| 03 Isolation | **Reader/Actor** | untrusted content never reaches the executor |
+| 04 Audit | **HMAC chain** | tamper-evident, verifiable via `clearframe audit-verify` |
+| 05 Oversight | **Aegis HITL** | human approve/reject/terminate, fail-closed |
+| 06 Trust | **TrustRegistry** | Ed25519 certificates, capability scopes, revocation |
+| 07 Adapters | **Any stack in** | MCP · A2A · LangChain · OpenAI · Bedrock · REST |
+| 08 Persistence | **Checkpoints** | crash-resumable sessions, replayable history |
+
+ClearFrame is the open-source runtime core of NexusProtocol.
+
+## Governance benchmark
+
+```bash
+clearframe bench
+```
+
+Eight adversarial + operational scenarios run through the real runtime
+(deterministic planner, no model variance):
+
+```
+NexusProtocol          8/8   ← measured live
+LangGraph 1.x          2/8   ← out-of-the-box (vendor docs, Aug 2026)
+Bedrock AgentCore      2/8
+MS Agent Framework     1/8
+OpenAI Agents SDK      0/8
+Claude Agent SDK       0/8
+OpenClaw               0/8
+```
+
+Controls: destructive-tool denial · secret-exfiltration denial · human sign-off
+for sensitive actions (fail-closed) · call budgets · undeclared-tool refusal ·
+checkpoint/resume · tamper-evident audit · what/why/how reasoning record.
+
+---
+
+## Create an agent (any toolchain)
+
+```bash
+clearframe agent new my-agent          # scaffold my-agent.agent.yaml
+clearframe agent validate my-agent.agent.yaml
+clearframe agent packs                 # list policy packs
+```
+
+Agent specs are portable YAML — the same file runs via CLI, `POST /api/agents`,
+or code. Tools can come from **any ecosystem**:
+
+```python
+from clearframe.adapters import MCPAdapter, LangChainAdapter, OpenAIToolsAdapter
+from clearframe.policy import PolicyEngine
+from clearframe import AgentSession, ClearFrameConfig
+
+tools = MCPAdapter("https://your-mcp-server/mcp").as_tool_registry()   # MCP
+# tools = LangChainAdapter([DuckDuckGoSearchRun()]).as_tool_registry() # LangChain/LangGraph
+# tools = OpenAIToolsAdapter(defs, dispatcher).as_tool_registry()      # OpenAI/Microsoft
+# tools = BedrockAdapter(agent_id="...").as_tool_registry()            # Amazon Bedrock
+# tools = HTTPToolAdapter([...]).as_tool_registry()                    # NVIDIA NIM / IBM watsonx / REST
+
+engine = PolicyEngine.with_packs("baseline", "eu-ai-act")
+async with AgentSession(config, manifest, tool_registry=tools, policy_engine=engine) as s:
+    await s.call_tool("web_search", query="...")
+```
+
+A2A: the gateway serves a spec-compliant AgentCard at
+`/.well-known/agent-card.json` so external agents (Copilot Studio, Bedrock
+AgentCore, Google ADK) can discover and delegate to ClearFrame.
+
+## Policy-as-code
+
+Shipped packs (`clearframe/policy/packs/`): `baseline`, `eu-ai-act`,
+`nist-ai-rmf`, `owasp-llm`. Rules: tool allow/deny, domain scoping, data
+guards (PII/secrets), HITL requirements, call budgets, trust-level gates.
+Governance document: [docs/governance/AI-POLICY.md](docs/governance/AI-POLICY.md).
+
+---
+
+## Deploy on EC2 (one command)
+
+```bash
+git clone -b cursor/nexus-sandbox-demo-be86 https://github.com/ibrahimmukherjee-boop/ClearFrame.git
+cd ClearFrame
+bash clearframe/deploy/install-ec2.sh
+```
+
+Then open:
+
+```
+http://YOUR-EC2-PUBLIC-IP:8080/
+```
+
+**Login:** none (demo mode).  
+**Security group:** allow inbound **TCP 8080**.
+
+### Docker
+
+```bash
+docker compose up --build -d
+# → http://YOUR-HOST:8080/
+```
+
+---
+
+## Local run
+
+```bash
+# from repo root
+pip install -e ./clearframe \
+  -e ./nexus-sandbox/components/trust-registry \
+  -e ./nexus-sandbox/components/aegis \
+  -e ./nexus-sandbox/components/sonar
+
+clearframe serve --host 0.0.0.0 --port 8080
+```
+
+Open **http://localhost:8080/** — branded control plane, no login.
+
+---
+
+## CLI
+
+```
+clearframe serve          # Full stack + UI (recommended)
+clearframe start          # AgentOps API only (:7477)
+clearframe ops-start      # Alias for start
+clearframe audit-verify   # Verify audit HMAC chain
+clearframe version
+```
 
 ---
 
 ## Why ClearFrame?
 
-| Problem with OpenClaw / MCP | ClearFrame's answer |
+| Problem with OpenClaw / MCP | ClearFrame |
 |---|---|
-| Single process reads untrusted content AND executes tools → prompt injection | **Reader/Actor isolation** — two sandboxed processes, typed pipe between them |
-| Credentials stored in plaintext `~/.env` | **Encrypted Vault** — AES-256-GCM, memory-locked, auto-locks on session end |
-| No audit trail — forensics impossible | **HMAC-chained Audit Log** — tamper-evident, cryptographically verifiable |
-| No concept of what the agent is *supposed* to do | **Goal Monitor** — every tool call scored for alignment; drift triggers auto-pause |
-| Chain-of-thought never captured | **Reasoning Transparency Layer (RTL)** — full trace as queryable JSON |
-| No visibility into what context the model received | **Context Feed Auditor** — every token source-tagged and hashed |
-| No operator control plane | **AgentOps** — live REST + WebSocket dashboard to approve, block, or tweak |
-| Plugin ecosystem with no signing or review | **Signed Plugin Registry** — Ed25519 signatures, hash pinning, sandboxed execution |
-
----
-
-## Quick Start
-
-```bash
-pip install clearframe
-
-# Initialise a new agent project
-clearframe init my-agent
-cd my-agent
-
-# Edit agent.py, then run
-python agent.py
-```
-
-### Minimal example
-
-```python
-import asyncio
-from clearframe import AgentSession, ClearFrameConfig
-from clearframe.core.manifest import GoalManifest, ToolPermission
-
-async def main():
-    config = ClearFrameConfig()
-    manifest = GoalManifest(
-        goal="Search for the latest AI safety papers and summarise them",
-        permitted_tools=[
-            ToolPermission(tool_name="web_search", max_calls_per_session=5),
-        ],
-    )
-    async with AgentSession(config, manifest) as session:
-        result = await session.call_tool("web_search", query="AI safety 2026")
-        print(result)
-
-asyncio.run(main())
-```
-
----
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      AgentSession                           │
-│                                                             │
-│  ┌──────────────┐   typed pipe   ┌──────────────────────┐  │
-│  │ ReaderSandbox│ ─────────────► │    ActorSandbox       │  │
-│  │ (untrusted   │                │ (tool execution only) │  │
-│  │  content)    │                │ never reads raw input │  │
-│  └──────────────┘                └──────────────────────┘  │
-│         │                                  │                │
-│         ▼                                  ▼                │
-│  ┌──────────────┐              ┌───────────────────────┐   │
-│  │Context Feed  │              │     Goal Monitor       │   │
-│  │Auditor       │              │  alignment scoring     │   │
-│  │source-tags + │              │  auto-pause on drift   │   │
-│  │hashes every  │              │  operator queue        │   │
-│  │token         │              └───────────────────────┘   │
-│  └──────────────┘                          │                │
-│                                            ▼                │
-│                              ┌───────────────────────┐     │
-│                              │  RTL (Reasoning        │     │
-│                              │  Transparency Layer)   │     │
-│                              │  hash-verified traces  │     │
-│                              └───────────────────────┘     │
-│                                            │                │
-│                                            ▼                │
-│                              ┌───────────────────────┐     │
-│                              │  HMAC-Chained Audit   │     │
-│                              │  Log (tamper-evident) │     │
-│                              └───────────────────────┘     │
-└─────────────────────────────────────────────────────────────┘
-                                             │
-                                             ▼
-                              ┌───────────────────────┐
-                              │    AgentOps Server     │
-                              │  REST + WebSocket      │
-                              │  localhost:7477        │
-                              └───────────────────────┘
-```
-
----
-
-## Core Concepts
-
-### GoalManifest
-Declare **what the agent is allowed to do** before it starts. The runtime enforces it.
-
-```python
-from clearframe.core.manifest import GoalManifest, ToolPermission, ResourceScope
-
-manifest = GoalManifest(
-    goal="Book a flight to London for next Friday",
-    permitted_tools=[
-        ToolPermission(tool_name="web_search", max_calls_per_session=10),
-        ToolPermission(tool_name="web_fetch", max_calls_per_session=5),
-        ToolPermission(tool_name="send_email", max_calls_per_session=1, require_approval=True),
-    ],
-    allow_file_write=False,
-    allow_code_execution=False,
-    max_steps=30,
-    resource_scope=ResourceScope(
-        allowed_domains=["flights.example.com", "*.airline.com"],
-    ),
-)
-```
-
-### Vault
-Never store credentials in plaintext again.
-
-```python
-from clearframe.core.vault import Vault
-from clearframe.core.config import VaultConfig
-
-vault = Vault(VaultConfig())
-vault.unlock("your-master-password")
-vault.set("openai_api_key", "sk-...")
-key = vault.get("openai_api_key")
-vault.lock()  # auto-zeroises memory
-```
-
-### Audit Log
-Cryptographically verify nothing was tampered with.
-
-```bash
-clearframe audit-verify
-# ✓ Audit log integrity verified — no tampering detected.
-
-clearframe audit-tail --lines 50
-```
-
-### AgentOps Server
-Start the live control plane:
-
-```bash
-clearframe ops-start
-# AgentOps running at http://localhost:7477
-# Auth token: <printed once to console>
-```
-
----
-
-## CLI Reference
-
-```
-clearframe init <name>          Create a new agent project
-clearframe audit-verify         Verify audit log HMAC chain integrity
-clearframe audit-tail           Show recent audit entries
-clearframe ops-start            Start AgentOps control plane
-clearframe version              Show version
-```
-
----
-
-## Comparison vs OpenClaw / MCP
-
-| Feature | OpenClaw | MCP | **ClearFrame** |
-|---|---|---|---|
-| Reader/Actor isolation | ✗ | ✗ | ✅ |
-| Goal alignment scoring | ✗ | ✗ | ✅ |
-| Reasoning trace capture | ✗ | Partial | ✅ Full JSON |
-| Tamper-evident audit log | ✗ | ✗ | ✅ HMAC chain |
-| Encrypted credential vault | ✗ | ✗ | ✅ AES-256-GCM |
-| Context feed hashing | ✗ | ✗ | ✅ |
-| Live operator control plane | ✗ | ✗ | ✅ |
-| Signed plugin registry | ✗ | ✗ | ✅ Ed25519 |
-| Auto-pause on drift | ✗ | ✗ | ✅ |
-| Open source | ✅ | ✅ | ✅ Apache 2.0 |
-
----
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md). All contributions welcome — open an issue first for large changes.
+| Prompt injection via mixed reader/actor | Reader/Actor isolation |
+| Plaintext credentials | AES-256-GCM vault |
+| No audit trail | HMAC-chained audit log |
+| No declared goal | Goal Monitor + auto-pause |
+| No operator control | Live control plane |
 
 ## License
 
-Apache 2.0 — see [LICENSE](LICENSE).
+Apache 2.0

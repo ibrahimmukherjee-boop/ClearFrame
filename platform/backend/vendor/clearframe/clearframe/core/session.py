@@ -51,6 +51,7 @@ class AgentSession:
         config: ClearFrameConfig,
         manifest: GoalManifest,
         tool_registry: dict[str, Callable] | None = None,
+        policy_engine: "Any | None" = None,
     ) -> None:
         self._config = config
         self._manifest = manifest
@@ -62,6 +63,7 @@ class AgentSession:
         self._vault   = Vault(config.vault)
         self._monitor = GoalMonitor(manifest, config.goal_monitor)
         self._rtl     = RTL(self._session_id, config.rtl)
+        self._policy  = policy_engine  # clearframe.policy.PolicyEngine | None
 
         self._pipe   = MessagePipe()
         self._reader = ReaderSandbox(self._session_id, self._pipe)
@@ -104,8 +106,38 @@ class AgentSession:
         """
         args = dict(kwargs)
         self._rtl.record("tool_call", f"{tool_name}({args})")
+        self._last_decision: dict[str, Any] = {"tool": tool_name}
+
+        # Policy engine runs first — policy-as-code beats heuristics.
+        if self._policy is not None:
+            verdict = self._policy.evaluate(tool_name, args)
+            self._last_decision["policy"] = {
+                "pack": verdict.policy,
+                "rule": verdict.rule,
+                "decision": verdict.decision.value,
+                "reasons": verdict.reasons,
+            }
+            self._audit.write(EventType.GOAL_SCORE, self._session_id, {
+                "tool_name": tool_name,
+                "policy": verdict.policy,
+                "rule": verdict.rule,
+                "decision": verdict.decision.value,
+            })
+            if verdict.decision.value == "deny":
+                raise SessionError(
+                    f"[ClearFrame] Tool '{tool_name}' DENIED by policy "
+                    f"'{verdict.policy}' ({verdict.rule}): {verdict.reasons}"
+                )
+            if verdict.decision.value == "require_hitl":
+                raise SessionError(
+                    f"[ClearFrame] Tool '{tool_name}' requires human approval "
+                    f"(policy '{verdict.policy}', {verdict.rule}). "
+                    "Queued for Aegis review."
+                )
 
         scored = self._monitor.evaluate(tool_name, args)
+        self._last_decision["alignment"] = scored.alignment_score
+        self._last_decision["disposition"] = scored.disposition.value
         self._audit.write(EventType.GOAL_SCORE, self._session_id, {
             "tool_name": tool_name,
             "score": scored.alignment_score,
@@ -179,6 +211,11 @@ class AgentSession:
     @property
     def session_id(self) -> str:
         return self._session_id
+
+    @property
+    def last_decision(self) -> dict[str, Any]:
+        """Governance verdict for the most recent call_tool invocation."""
+        return getattr(self, "_last_decision", {})
 
     @property
     def audit(self) -> AuditLog:

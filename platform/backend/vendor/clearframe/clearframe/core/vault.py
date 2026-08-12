@@ -78,12 +78,10 @@ class Vault:
         self._data[name] = value
         self._encrypt()
 
-    def get(self, name: str) -> str:
+    def get(self, name: str) -> Optional[str]:
         self._require_unlocked()
         assert self._data is not None
-        if name not in self._data:
-            raise VaultError(f"Credential '{name}' not found in vault.")
-        return self._data[name]
+        return self._data.get(name)
 
     def delete(self, name: str) -> None:
         self._require_unlocked()
