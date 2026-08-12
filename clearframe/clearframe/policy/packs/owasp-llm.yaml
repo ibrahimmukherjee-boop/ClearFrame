@@ -1,0 +1,27 @@
+name: owasp-llm
+title: OWASP Top 10 for LLM Applications (2025) Controls
+version: "1.0"
+description: >
+  Tool-call-level mitigations for the OWASP LLM Top 10. Prompt-injection
+  (LLM01) and output handling (LLM05) are covered by Sonar scanning and
+  Reader/Actor isolation; this pack addresses excessive agency (LLM06),
+  sensitive information disclosure (LLM02), and unbounded consumption (LLM10).
+references:
+  - "LLM01 Prompt Injection — Sonar scan + Reader/Actor isolation"
+  - "LLM02 Sensitive Information Disclosure — data.deny_patterns"
+  - "LLM06 Excessive Agency — tools.allow + actions.require_approval"
+  - "LLM10 Unbounded Consumption — limits.max_calls_per_tool"
+rules:
+  data:
+    deny_patterns:
+      - label: api-key-generic
+        pattern: "(api[_-]?key|secret[_-]?key|bearer)\\s*[:=]\\s*\\S{16,}"
+      - label: email-bulk-exfil
+        pattern: "([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}.*){5,}"
+  actions:
+    require_approval:
+      - "http_post"
+      - "upload_*"
+      - "export_*"
+  limits:
+    max_calls_per_tool: 30

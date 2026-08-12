@@ -1,0 +1,12 @@
+[Unit]
+Description=ClearFrame stack health watchdog
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/clearframe/app/scripts/ec2-watchdog.sh
+User=ec2-user
+
+[Install]
+WantedBy=multi-user.target

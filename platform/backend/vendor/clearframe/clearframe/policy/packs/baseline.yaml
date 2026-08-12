@@ -1,0 +1,36 @@
+name: baseline
+title: ClearFrame Baseline Safety Policy
+version: "1.0"
+description: >
+  Minimum safe defaults for any agent. Blocks destructive tools, guards
+  obvious secrets/PII in tool arguments, and requires human approval for
+  irreversible or financially sensitive actions.
+references:
+  - OWASP LLM Top 10 (2025) — LLM06 Excessive Agency, LLM02 Sensitive Information Disclosure
+rules:
+  tools:
+    deny:
+      - "delete_*"
+      - "drop_*"
+      - "rm_*"
+      - "format_*"
+      - "shutdown*"
+  data:
+    deny_patterns:
+      - label: aws-secret-key
+        pattern: "(?<![A-Za-z0-9/+=])[A-Za-z0-9/+=]{40}(?![A-Za-z0-9/+=])"
+      - label: private-key-block
+        pattern: "-----BEGIN (RSA |EC )?PRIVATE KEY-----"
+      - label: password-in-args
+        pattern: "password\\s*[:=]\\s*\\S+"
+  actions:
+    require_approval:
+      - "send_email"
+      - "send_message"
+      - "transfer_*"
+      - "refund_*"
+      - "payment_*"
+      - "publish_*"
+      - "deploy_*"
+  limits:
+    max_calls_per_tool: 50
