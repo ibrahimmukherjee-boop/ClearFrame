@@ -1,78 +1,74 @@
-# Hosting NexusProtocol / ClearFrame
+# Hosting NexusProtocol / ClearFrame — all on GitHub
 
-The product is **two deployable parts**. Pick the split that suits you.
+Everything runs from this GitHub repository. No Vercel, no Render, no AWS
+required.
 
 ```
-   ┌─────────────────────────────┐        ┌──────────────────────────────┐
-   │  Frontend (static SPA)      │  HTTPS │  Backend (FastAPI, one image) │
-   │  GitHub Pages  or  Vercel   │ ─────▶ │  Render / Fly / Railway       │
-   │  (I host this — permanent)  │  /api  │  (your account — one click)   │
-   └─────────────────────────────┘        └──────────────────────────────┘
-                     │                                    │
-        connect field / VITE_API_URL          SQLite on a persistent disk
+ ┌───────────────────────────────────────────────────────────────────────┐
+ │                              GitHub                                   │
+ │                                                                       │
+ │  GitHub Pages ── docs/ console, fully working (in-browser engine)     │
+ │  GitHub Actions ─ CI (tests + lint) and the Pages deploy              │
+ │  GitHub Codespaces ─ one-click full stack (API + SPA in a container)  │
+ └───────────────────────────────────────────────────────────────────────┘
 ```
 
-Or run **everything in one container** (backend also serves the SPA) — simplest.
+## 1. GitHub Pages — the working console (zero setup)
 
----
-
-## Option A — Single container (simplest, one URL)
-
-Render Blueprint (permanent HTTPS, free-tier capable):
-
-1. Push this repo to GitHub.
-2. Render → New → **Blueprint** → pick the repo (reads [`render.yaml`](render.yaml)).
-   It builds `platform/Dockerfile`, generates secrets + an admin password, and
-   serves the SPA and API from one service.
-3. Open the URL, sign in as `admin@erasys.local` (password in Render →
-   Environment → `CLEARFRAME_ADMIN_PASSWORD`).
-
-Local equivalent:
-
-```bash
-CLEARFRAME_ADMIN_PASSWORD=strong-pw docker compose up --build -d   # → http://localhost:8080
-```
-
-## Option B — Split: GitHub Pages (frontend) + Render (backend)
-
-**Frontend on GitHub Pages** is deployed automatically by
-[`.github/workflows/pages.yml`](.github/workflows/pages.yml) on every push
-(and is mirrored to `docs/` for the legacy Pages source). Live at:
+[`.github/workflows/pages.yml`](.github/workflows/pages.yml) deploys the
+static console in [`docs/`](docs/) on every push to `main`. Live at:
 
 ```
 https://ibrahimmukherjee-boop.github.io/ClearFrame/
 ```
 
-**Backend on Render** — Option A's blueprint. Then connect them one of two ways:
+One-time repo setting: **Settings → Pages → Source → GitHub Actions.**
 
-- On the Pages login screen, paste your backend URL into the **Connect a
-  backend** field (saved in your browser), or
-- Set a repo **variable** `VITE_API_URL = https://your-backend.onrender.com/api`
-  so the Pages build hardwires it (no per-user step).
+The console is *fully functional on Pages alone*: the demo runtime
+(`docs/engine.js`) is a real policy engine that runs in the browser —
+policy packs evaluate actions, sensitive actions sink into the
+human-approval dip, and everything lands in a hash-chained audit log.
+Sign in, or press **Enter the live demo**.
 
-## Option C — Vercel (frontend) + Render (backend)
+## 2. GitHub Codespaces — the full stack (Docker on GitHub)
 
-Import the repo in Vercel, set **Root Directory = `platform`** (uses
-[`platform/vercel.json`](platform/vercel.json)), and add env
-`VITE_API_URL = https://your-backend.onrender.com/api`.
+GitHub Pages cannot run containers, but GitHub Codespaces can — it is
+GitHub's hosted Docker. [`.devcontainer/devcontainer.json`](.devcontainer/devcontainer.json)
+sets everything up:
 
----
+1. Repo page → **Code → Codespaces → Create codespace on main**.
+2. When it finishes building: `cd platform && npm run dev:all`
+3. Open the forwarded port **5173**. Login: `admin@erasys.local` / `admin`.
 
-## Why not the backend on Pages/Vercel-serverless?
+To drive the Pages console with this backend: make port **8080** public
+(Ports panel → right-click → Port visibility → Public), then paste the
+forwarded 8080 URL into the console's **Live gateway** connection bar.
 
-The backend keeps a tamper-evident SQLite audit chain (WAL), a background
-ClearFrame ops server, and long-lived session/governance state. That needs a
-persistent container, not ephemeral serverless — so the backend runs on a
-container PaaS (Render/Fly/Railway) while the static SPA can live anywhere.
+## 3. GitHub Actions — CI
 
-## Login
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on every push
+and pull request:
 
-- With `CLEARFRAME_ADMIN_PASSWORD` set (any deploy): that password is used.
-- Local dev without it: seeds `admin@erasys.local` / `admin`.
-- Production (`CLEARFRAME_ENV=production`): unique secrets + PostgreSQL required.
+- `clearframe` library test suite (pytest)
+- `platform/backend` ISO 42001 unit suite (pytest)
+- `platform` frontend lint + production build
+
+## Local development
+
+```bash
+cd platform && ./start-local.sh    # or: npm run dev:all
+# UI  → http://localhost:5173   (login admin@erasys.local / admin)
+# API → http://127.0.0.1:8080/api/health
+```
+
+Single container (self-hosting anywhere Docker runs):
+
+```bash
+CLEARFRAME_ADMIN_PASSWORD=strong-pw docker compose up --build -d   # → http://localhost:8080
+```
 
 ## Health
 
 ```bash
-curl -s https://YOUR-BACKEND/api/health | python3 -m json.tool
+curl -s http://127.0.0.1:8080/api/health | python3 -m json.tool
 ```

@@ -77,12 +77,12 @@ export function LoginPage() {
                 <Server className="w-4 h-4" /> Connect a backend
               </p>
               <p className="text-gray-400 text-xs mb-3">
-                This frontend can't reach an API. Deploy the backend (one-click on Render — see the repo),
+                This frontend can't reach an API. Start the backend (GitHub Codespaces or Docker — see DEPLOY.md),
                 then paste its URL here. Leave blank to use the same origin.
               </p>
               <div className="flex gap-2">
                 <Input value={backend} onChange={(e) => setBackendUrl(e.target.value)}
-                  placeholder="https://your-backend.onrender.com"
+                  placeholder="https://your-codespace-8080.app.github.dev"
                   className="bg-[#1e293b] border-[#334155] text-xs" />
                 <Button type="button" size="sm" onClick={saveBackend} className="bg-amber-500/80 hover:bg-amber-500 shrink-0">
                   Connect

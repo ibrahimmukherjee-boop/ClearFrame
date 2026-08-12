@@ -4,83 +4,34 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>NexusProtocol — Sign in</title>
+<link rel="icon" type="image/svg+xml" href="./favicon.svg" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
-<style>
-:root {
-  --paper: #f2f1ed; --ink: #141412; --muted: #8a8a83;
-  --line: rgba(20,20,18,.12); --red: #c22f2f;
-  --font: "Inter", system-ui, sans-serif;
-  --mono: "IBM Plex Mono", ui-monospace, monospace;
-  --raise: 7px 7px 18px rgba(20,20,18,.14), -6px -6px 14px rgba(255,255,255,.9);
-  --sink: inset 5px 5px 10px rgba(20,20,18,.11), inset -4px -4px 9px rgba(255,255,255,.9);
-}
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { min-height: 100%; }
-body { font-family: var(--font); color: var(--ink); background: var(--paper); -webkit-font-smoothing: antialiased; }
-.grain {
-  position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: .5;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 220 220' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.16'/%3E%3C/svg%3E");
-}
-.rays {
-  position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: .07;
-  background: repeating-linear-gradient(90deg, var(--ink) 0 1px, transparent 1px 9px);
-  mask-image: radial-gradient(ellipse 55% 45% at 78% 24%, black, transparent 70%);
-}
-.sheets { position: fixed; right: -40px; bottom: -30px; z-index: 0; pointer-events: none; width: 340px; height: 340px; opacity: .9; }
-.sheets div { position: absolute; right: 0; bottom: 0; background: linear-gradient(160deg, rgba(20,20,18,.85), rgba(20,20,18,.25)); transform: skewX(-14deg); }
-.sheets div:nth-child(1) { width: 220px; height: 200px; right: 10px; bottom: 130px; opacity: .85; }
-.sheets div:nth-child(2) { width: 180px; height: 160px; right: 40px; bottom: 84px; opacity: .6; }
-.sheets div:nth-child(3) { width: 140px; height: 120px; right: 66px; bottom: 48px; opacity: .4; }
-.sheets div:nth-child(4) { width: 100px; height: 80px; right: 88px; bottom: 22px; opacity: .25; }
-.sheets div:nth-child(5) { width: 64px; height: 46px; right: 106px; bottom: 4px; opacity: .15; }
-.shell { position: relative; z-index: 1; min-height: 100vh; display: grid; place-items: center; padding: 1.5rem; }
-.card {
-  width: min(410px, 100%); background: var(--paper); border-radius: 22px;
-  padding: 2rem 1.75rem 1.5rem; box-shadow: 12px 12px 32px rgba(20,20,18,.14), -10px -10px 26px rgba(255,255,255,.9), inset 0 0 0 1px rgba(255,255,255,.5);
-}
-.brand { display: flex; align-items: center; gap: .85rem; margin-bottom: 1.1rem; }
-.mark { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: var(--paper); box-shadow: var(--raise); }
-.mark svg { width: 22px; height: 22px; }
-.brand h1 { font-size: 1.35rem; font-weight: 700; letter-spacing: -.02em; }
-.brand p { font-family: var(--mono); font-size: .6rem; color: var(--muted); letter-spacing: .14em; text-transform: uppercase; margin-top: .2rem; }
-.tagline { font-size: .68rem; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 1rem; padding: .35rem .6rem; border-radius: 8px; box-shadow: var(--sink); display: inline-block; }
-.mission { font-size: .88rem; line-height: 1.5; color: var(--muted); margin-bottom: 1.35rem; }
-.mission b { color: var(--ink); font-weight: 600; }
-label { display: block; font-family: var(--mono); font-size: .62rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: .4rem; }
-input { width: 100%; padding: .85rem 1rem; margin-bottom: 1rem; border-radius: 12px; border: none; background: var(--paper); color: var(--ink); font-family: var(--font); font-size: .95rem; outline: none; box-shadow: var(--sink); }
-input:focus { box-shadow: inset 5px 5px 10px rgba(20,20,18,.16), inset -4px -4px 9px rgba(255,255,255,.95), 0 0 0 2px rgba(20,20,18,.22); }
-.btn { width: 100%; border: none; border-radius: 12px; padding: .95rem 1rem; font-family: var(--font); font-weight: 600; font-size: .95rem; cursor: pointer; background: var(--ink); color: var(--paper); box-shadow: 8px 8px 20px rgba(20,20,18,.22), -6px -6px 14px rgba(255,255,255,.85); transition: transform .12s ease; }
-.btn:hover { transform: translateY(-1px); } .btn:active { transform: scale(.985); }
-.error { display: none; margin-bottom: 1rem; padding: .65rem .85rem; border-radius: 10px; background: rgba(194,47,47,.08); border: 1px solid rgba(194,47,47,.3); color: var(--red); font-size: .83rem; }
-.error.show { display: block; }
-.hint { margin-top: 1rem; font-family: var(--mono); font-size: .62rem; color: var(--muted); letter-spacing: .06em; text-align: center; line-height: 1.6; }
-.footer { margin-top: 1.35rem; padding-top: 1rem; border-top: 1px solid var(--line); display: flex; justify-content: space-between; font-family: var(--mono); font-size: .56rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
-.reddot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--red); margin-right: .4rem; vertical-align: middle; }
-</style>
+<link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
 <div class="grain"></div><div class="rays"></div>
 <div class="sheets" aria-hidden="true"><div></div><div></div><div></div><div></div><div></div></div>
-<main class="shell">
-  <form class="card" id="login-form" autocomplete="on">
-    <div class="brand">
+<main class="login-shell">
+  <form class="login-card" id="login-form" autocomplete="on">
+    <div class="login-brand">
       <div class="mark" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#141412" stroke-width="1.7"><path d="M8 8c-2.2 2.2-2.2 5.8 0 8M16 8c2.2 2.2 2.2 5.8 0 8M10 12h4"/><circle cx="8" cy="12" r="2.2"/><circle cx="16" cy="12" r="2.2"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="#161511" stroke-width="1.7"><path d="M8 8c-2.2 2.2-2.2 5.8 0 8M16 8c2.2 2.2 2.2 5.8 0 8M10 12h4"/><circle cx="8" cy="12" r="2.2"/><circle cx="16" cy="12" r="2.2"/></svg>
       </div>
       <div><h1>NexusProtocol</h1><p>managed intelligence</p></div>
     </div>
     <div class="tagline">the OS for AI agents</div>
-    <p class="mission"><b>Create agents from any stack.</b> Police every action. Keep humans in command. Governance benchmarked at 8/8 — every major provider scored below.</p>
+    <p class="mission"><b>Create agents from any stack.</b> Police every action. Keep humans in command. This console is fully working right here on GitHub Pages — the governance engine runs in your browser.</p>
     <div class="error" id="error">Invalid username or password.</div>
     <label for="username">Username</label>
     <input id="username" name="username" type="text" required autofocus placeholder="Username" />
     <label for="password">Password</label>
     <input id="password" name="password" type="password" required placeholder="Password" />
-    <button class="btn" type="submit">Sign in</button>
-    <p class="hint">Demo credentials are in your deployment message.</p>
-    <div class="footer"><span><span class="reddot"></span>MCP · A2A · LangChain · Bedrock · NIM</span><span>ISO 42001</span></div>
+    <button class="btn btn-ink" type="submit" style="width:100%;padding:.95rem 1rem;font-size:.95rem">Sign in</button>
+    <button class="btn" type="button" id="demo-btn" style="width:100%;margin-top:.6rem;padding:.85rem 1rem">Enter the live demo</button>
+    <p class="hint">Operator credentials are in your deployment message.<br/>“Enter the live demo” needs no credentials.</p>
+    <div class="footer" style="margin-top:1.35rem;padding-top:1rem;border-top:1px solid var(--line)"><span><span class="reddot"></span>MCP · A2A · LangChain · Bedrock · NIM</span><span>ISO 42001</span></div>
   </form>
 </main>
 <script>
@@ -88,16 +39,19 @@ input:focus { box-shadow: inset 5px 5px 10px rgba(20,20,18,.16), inset -4px -4px
   const KEY = "clearframe_session_v1";
   const USERS = { admin: "NexusProtocol2026!", clearframe: "ClearFrame!Edge" };
   if (sessionStorage.getItem(KEY) === "ok") { location.replace("./app.html"); return; }
+  function enter(user) {
+    sessionStorage.setItem(KEY, "ok");
+    sessionStorage.setItem("clearframe_user", user);
+    location.href = "./app.html";
+  }
   document.getElementById("login-form").addEventListener("submit", function (e) {
     e.preventDefault();
     const u = document.getElementById("username").value.trim();
     const p = document.getElementById("password").value;
-    if (USERS[u] && USERS[u] === p) {
-      sessionStorage.setItem(KEY, "ok");
-      sessionStorage.setItem("clearframe_user", u);
-      location.href = "./app.html";
-    } else { document.getElementById("error").classList.add("show"); }
+    if (USERS[u] && USERS[u] === p) { enter(u); }
+    else { document.getElementById("error").classList.add("show"); }
   });
+  document.getElementById("demo-btn").addEventListener("click", function () { enter("demo-operator"); });
 })();
 </script>
 </body>

@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  clearframe-tests:
+    name: clearframe library tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        working-directory: clearframe
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]" pytest
+      - name: Test
+        working-directory: clearframe
+        run: pytest -q
+
+  backend-tests:
+    name: platform backend tests (ISO 42001 suite)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        working-directory: platform/backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Test (unit suite)
+        working-directory: platform/backend
+        run: pytest tests/test_iso42001.py -q
+
+  frontend-lint:
+    name: platform frontend lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: platform/package-lock.json
+      - name: Install
+        working-directory: platform
+        run: npm ci
+      - name: Lint
+        working-directory: platform
+        run: npm run lint
+      - name: Build
+        working-directory: platform
+        run: npm run build

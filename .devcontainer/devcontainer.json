@@ -1,0 +1,13 @@
+{
+  "name": "ClearFrame full stack (GitHub Codespaces)",
+  "image": "mcr.microsoft.com/devcontainers/universal:2",
+  "features": {},
+  "forwardPorts": [5173, 8080, 7477],
+  "portsAttributes": {
+    "5173": { "label": "Console (Vite)", "onAutoForward": "openPreview" },
+    "8080": { "label": "Gateway API" },
+    "7477": { "label": "AgentOps" }
+  },
+  "postCreateCommand": "cd platform && npm ci && python3 -m venv backend/.venv && backend/.venv/bin/pip install --upgrade pip && cd backend && .venv/bin/pip install -r requirements.txt",
+  "postAttachCommand": "echo 'Run: cd platform && npm run dev:all — then open port 5173. Login: admin@erasys.local / admin'"
+}
