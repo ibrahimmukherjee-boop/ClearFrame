@@ -1,14 +1,58 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Erasys AI Governance and Safety</title>
-    <script type="module" crossorigin src="./assets/index-jFYhlc88.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-C1oMpd5i.css">
-  </head>
-  <body>
-    <div id="root"></div>
-  </body>
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>NexusProtocol — Sign in</title>
+<link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+<div class="grain"></div><div class="rays"></div>
+<div class="sheets" aria-hidden="true"><div></div><div></div><div></div><div></div><div></div></div>
+<main class="login-shell">
+  <form class="login-card" id="login-form" autocomplete="on">
+    <div class="login-brand">
+      <div class="mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#161511" stroke-width="1.7"><path d="M8 8c-2.2 2.2-2.2 5.8 0 8M16 8c2.2 2.2 2.2 5.8 0 8M10 12h4"/><circle cx="8" cy="12" r="2.2"/><circle cx="16" cy="12" r="2.2"/></svg>
+      </div>
+      <div><h1>NexusProtocol</h1><p>managed intelligence</p></div>
+    </div>
+    <div class="tagline">the OS for AI agents</div>
+    <p class="mission"><b>Create agents from any stack.</b> Police every action. Keep humans in command. This console is fully working right here on GitHub Pages — the governance engine runs in your browser.</p>
+    <div class="error" id="error">Invalid username or password.</div>
+    <label for="username">Username</label>
+    <input id="username" name="username" type="text" required autofocus placeholder="Username" />
+    <label for="password">Password</label>
+    <input id="password" name="password" type="password" required placeholder="Password" />
+    <button class="btn btn-ink" type="submit" style="width:100%;padding:.95rem 1rem;font-size:.95rem">Sign in</button>
+    <button class="btn" type="button" id="demo-btn" style="width:100%;margin-top:.6rem;padding:.85rem 1rem">Enter the live demo</button>
+    <p class="hint">Operator credentials are in your deployment message.<br/>“Enter the live demo” needs no credentials.</p>
+    <div class="footer" style="margin-top:1.35rem;padding-top:1rem;border-top:1px solid var(--line)"><span><span class="reddot"></span>MCP · A2A · LangChain · Bedrock · NIM</span><span>ISO 42001</span></div>
+  </form>
+</main>
+<script>
+(function () {
+  const KEY = "clearframe_session_v1";
+  const USERS = { admin: "NexusProtocol2026!", clearframe: "ClearFrame!Edge" };
+  if (sessionStorage.getItem(KEY) === "ok") { location.replace("./app.html"); return; }
+  function enter(user) {
+    sessionStorage.setItem(KEY, "ok");
+    sessionStorage.setItem("clearframe_user", user);
+    location.href = "./app.html";
+  }
+  document.getElementById("login-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    const u = document.getElementById("username").value.trim();
+    const p = document.getElementById("password").value;
+    if (USERS[u] && USERS[u] === p) { enter(u); }
+    else { document.getElementById("error").classList.add("show"); }
+  });
+  document.getElementById("demo-btn").addEventListener("click", function () { enter("demo-operator"); });
+})();
+</script>
+</body>
 </html>

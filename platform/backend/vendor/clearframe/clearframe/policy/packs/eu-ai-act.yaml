@@ -1,0 +1,39 @@
+name: eu-ai-act
+title: EU AI Act Operational Controls (Reg. 2024/1689)
+version: "1.0"
+description: >
+  Operational controls mapped to the EU AI Act obligations that apply to
+  deployers of high-risk and general-purpose AI systems. Full legal mapping
+  in docs/governance/eu-ai-act.md. Key articles: Art. 9 (risk management),
+  Art. 12 (record-keeping / logging), Art. 14 (human oversight),
+  Art. 15 (accuracy, robustness, cybersecurity), Art. 26 (deployer duties).
+references:
+  - "EU AI Act Art. 12: automatic recording of events (ClearFrame audit chain)"
+  - "EU AI Act Art. 14: human oversight measures (Aegis HITL)"
+  - "EU AI Act Art. 26(5): monitor operation, suspend on risk (Goal Monitor)"
+rules:
+  actions:
+    require_approval:
+      # Art. 14 — decisions with legal or similarly significant effect need
+      # effective human oversight before execution.
+      - "*_decision"
+      - "approve_*"
+      - "reject_*"
+      - "score_person"
+      - "profile_*"
+      - "classify_person*"
+      - "send_email"
+      - "transfer_*"
+  tools:
+    deny:
+      # Art. 5 — prohibited practices; no tool surface for these at all.
+      - "social_scoring*"
+      - "emotion_recognition_workplace*"
+      - "biometric_categorisation*"
+      - "scrape_facial_images*"
+  data:
+    deny_patterns:
+      - label: special-category-data
+        pattern: "(racial origin|ethnic origin|political opinion|religious belief|trade union|genetic data|biometric data|health data|sex life|sexual orientation)"
+  limits:
+    max_calls_per_tool: 100
