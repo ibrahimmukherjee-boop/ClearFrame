@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Shield, LogIn, AlertCircle } from 'lucide-react'
+import { Shield, LogIn, AlertCircle, Server } from 'lucide-react'
 import { useAuth } from '@/lib/auth-store'
+import { apiUrl, getBackend, setBackend } from '@/lib/api'
 import { toast } from 'sonner'
 
 const DEMO_EMAIL = 'admin@erasys.local'
@@ -16,13 +17,21 @@ export function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isProduction, setIsProduction] = useState(false)
+  const [backend, setBackendUrl] = useState(getBackend())
+  const [reachable, setReachable] = useState<boolean | null>(null)
 
   useEffect(() => {
-    fetch('/api/health')
+    fetch(apiUrl('/health'))
       .then((r) => r.json())
-      .then((d) => setIsProduction(Boolean(d.production?.production)))
-      .catch(() => {})
+      .then((d) => { setIsProduction(Boolean(d.production?.production)); setReachable(true) })
+      .catch(() => setReachable(false))
   }, [])
+
+  const saveBackend = () => {
+    setBackend(backend)
+    toast.success(backend ? `Backend set to ${backend}` : 'Using same-origin backend')
+    setTimeout(() => window.location.reload(), 400)
+  }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -61,6 +70,26 @@ export function LoginPage() {
               <p className="text-sm text-gray-400">AI Governance and Safety Platform</p>
             </div>
           </div>
+
+          {reachable === false && (
+            <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg text-sm">
+              <p className="font-medium text-amber-300 mb-2 flex items-center gap-2">
+                <Server className="w-4 h-4" /> Connect a backend
+              </p>
+              <p className="text-gray-400 text-xs mb-3">
+                This frontend can't reach an API. Deploy the backend (one-click on Render — see the repo),
+                then paste its URL here. Leave blank to use the same origin.
+              </p>
+              <div className="flex gap-2">
+                <Input value={backend} onChange={(e) => setBackendUrl(e.target.value)}
+                  placeholder="https://your-backend.onrender.com"
+                  className="bg-[#1e293b] border-[#334155] text-xs" />
+                <Button type="button" size="sm" onClick={saveBackend} className="bg-amber-500/80 hover:bg-amber-500 shrink-0">
+                  Connect
+                </Button>
+              </div>
+            </div>
+          )}
 
           {isProduction && (
             <div className="mb-6 p-4 bg-[#4361ee]/10 border border-[#4361ee]/30 rounded-lg text-sm">

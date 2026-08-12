@@ -1,4 +1,31 @@
-const API_BASE = import.meta.env.VITE_API_URL ?? '/api'
+// Backend origin resolution (in priority order):
+//   1. a runtime override the operator saved in the browser (Connect field),
+//   2. the VITE_API_URL baked in at build time (e.g. GitHub Pages -> Render),
+//   3. same-origin '/api' (single-container deploy).
+const BACKEND_KEY = 'nexus_backend'
+
+export function getBackend(): string {
+  if (typeof localStorage !== 'undefined') return localStorage.getItem(BACKEND_KEY) || ''
+  return ''
+}
+
+export function setBackend(url: string): void {
+  if (typeof localStorage === 'undefined') return
+  const clean = url.trim().replace(/\/+$/, '')
+  if (clean) localStorage.setItem(BACKEND_KEY, clean)
+  else localStorage.removeItem(BACKEND_KEY)
+}
+
+function apiBase(): string {
+  const override = getBackend()
+  if (override) return `${override}/api`
+  return (import.meta.env.VITE_API_URL as string | undefined) ?? '/api'
+}
+
+/** Absolute URL for an API path using the resolved backend. */
+export function apiUrl(path: string): string {
+  return `${apiBase()}${path}`
+}
 
 function authHeaders(): Record<string, string> {
   const token = typeof localStorage !== 'undefined' ? localStorage.getItem('erasys_access_token') : null
@@ -6,7 +33,7 @@ function authHeaders(): Record<string, string> {
 }
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetch(`${apiBase()}${path}`, {
     headers: { 'Content-Type': 'application/json', ...authHeaders(), ...options?.headers },
     ...options,
   })

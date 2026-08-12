@@ -1,56 +1,78 @@
-# Deploy NexusProtocol / ClearFrame
+# Hosting NexusProtocol / ClearFrame
 
-The **main application** lives in [`platform/`](platform/) — the enterprise
-build: a React frontend and a FastAPI backend (25+ governance services, OIDC/JWT
-auth, ISO 42001 / EU AI Act / NIST / OWASP compliance, Aegis HITL, Sonar, Trust
-Registry, audit chain) compiled into **one container**. The backend serves the
-SPA at `/` and the API at `/api` — one service, one URL, no AWS.
+The product is **two deployable parts**. Pick the split that suits you.
 
-## Fastest path — Render (free-tier capable, permanent HTTPS)
+```
+   ┌─────────────────────────────┐        ┌──────────────────────────────┐
+   │  Frontend (static SPA)      │  HTTPS │  Backend (FastAPI, one image) │
+   │  GitHub Pages  or  Vercel   │ ─────▶ │  Render / Fly / Railway       │
+   │  (I host this — permanent)  │  /api  │  (your account — one click)   │
+   └─────────────────────────────┘        └──────────────────────────────┘
+                     │                                    │
+        connect field / VITE_API_URL          SQLite on a persistent disk
+```
+
+Or run **everything in one container** (backend also serves the SPA) — simplest.
+
+---
+
+## Option A — Single container (simplest, one URL)
+
+Render Blueprint (permanent HTTPS, free-tier capable):
 
 1. Push this repo to GitHub.
 2. Render → New → **Blueprint** → pick the repo (reads [`render.yaml`](render.yaml)).
-   It builds `platform/Dockerfile` and runs the whole stack, generating secure
-   secrets and an admin password automatically.
-3. Open the URL, sign in as `admin@erasys.local` with the generated
-   `CLEARFRAME_ADMIN_PASSWORD` (Render dashboard → Environment).
+   It builds `platform/Dockerfile`, generates secrets + an admin password, and
+   serves the SPA and API from one service.
+3. Open the URL, sign in as `admin@erasys.local` (password in Render →
+   Environment → `CLEARFRAME_ADMIN_PASSWORD`).
 
-## Local / any VPS (Docker)
-
-```bash
-CLEARFRAME_ADMIN_PASSWORD=choose-a-strong-password docker compose up --build -d
-# → http://localhost:8080   (sign in: admin@erasys.local / that password)
-```
-
-## Local (no Docker)
+Local equivalent:
 
 ```bash
-cd platform
-npm install && npm run build          # builds the SPA
-cp -r dist backend/static
-cd backend
-python -m venv .venv && . .venv/bin/activate
-pip install -r requirements.txt
-CLEARFRAME_ADMIN_PASSWORD=choose-a-strong-password CLEARFRAME_RELOAD=false python run.py
-# → http://localhost:8080
+CLEARFRAME_ADMIN_PASSWORD=strong-pw docker compose up --build -d   # → http://localhost:8080
 ```
 
-## Other no-AWS options
+## Option B — Split: GitHub Pages (frontend) + Render (backend)
 
-| Platform | Notes |
-|----------|-------|
-| Fly.io | `cd platform && fly launch --dockerfile Dockerfile` |
-| Hugging Face Spaces | Docker SDK space from `platform/`, `app_port: 8080` |
-| Railway | Deploy from GitHub, root `platform/`, injects `$PORT` |
+**Frontend on GitHub Pages** is deployed automatically by
+[`.github/workflows/pages.yml`](.github/workflows/pages.yml) on every push
+(and is mirrored to `docs/` for the legacy Pages source). Live at:
+
+```
+https://ibrahimmukherjee-boop.github.io/ClearFrame/
+```
+
+**Backend on Render** — Option A's blueprint. Then connect them one of two ways:
+
+- On the Pages login screen, paste your backend URL into the **Connect a
+  backend** field (saved in your browser), or
+- Set a repo **variable** `VITE_API_URL = https://your-backend.onrender.com/api`
+  so the Pages build hardwires it (no per-user step).
+
+## Option C — Vercel (frontend) + Render (backend)
+
+Import the repo in Vercel, set **Root Directory = `platform`** (uses
+[`platform/vercel.json`](platform/vercel.json)), and add env
+`VITE_API_URL = https://your-backend.onrender.com/api`.
+
+---
+
+## Why not the backend on Pages/Vercel-serverless?
+
+The backend keeps a tamper-evident SQLite audit chain (WAL), a background
+ClearFrame ops server, and long-lived session/governance state. That needs a
+persistent container, not ephemeral serverless — so the backend runs on a
+container PaaS (Render/Fly/Railway) while the static SPA can live anywhere.
 
 ## Login
 
-- Local dev with no `CLEARFRAME_ADMIN_PASSWORD`: seeds `admin@erasys.local` / `admin`.
-- Any deploy with `CLEARFRAME_ADMIN_PASSWORD` set: that password is used (never admin/admin).
-- Production (`CLEARFRAME_ENV=production`): requires unique secrets + PostgreSQL `DATABASE_URL`.
+- With `CLEARFRAME_ADMIN_PASSWORD` set (any deploy): that password is used.
+- Local dev without it: seeds `admin@erasys.local` / `admin`.
+- Production (`CLEARFRAME_ENV=production`): unique secrets + PostgreSQL required.
 
 ## Health
 
 ```bash
-curl -s https://YOUR-URL/api/health | python3 -m json.tool
+curl -s https://YOUR-BACKEND/api/health | python3 -m json.tool
 ```

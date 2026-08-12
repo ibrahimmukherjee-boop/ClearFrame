@@ -1,3 +1,4 @@
+import { apiUrl } from './api'
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
 
 export interface AuthUser {
@@ -59,7 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setToken(stored)
       setUser(JSON.parse(storedUser))
     }
-    fetch('/api/health')
+    fetch(apiUrl('/health'))
       .then((r) => r.json())
       .then((d) => setSsoAvailable(!!d.ssoEnabled))
       .catch(() => {})
@@ -67,7 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const login = useCallback(async (email: string, password: string) => {
-    const res = await fetch('/api/auth/login', {
+    const res = await fetch(apiUrl('/auth/login'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
@@ -84,7 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const loginWithSso = useCallback(async () => {
-    const res = await fetch('/api/auth/oidc/login')
+    const res = await fetch(apiUrl('/auth/oidc/login'))
     if (!res.ok) throw new Error('SSO not configured')
     const data = await res.json()
     window.location.href = data.url
