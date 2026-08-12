@@ -21,6 +21,10 @@ services:
         value: "true"
       - key: CLEARFRAME_DATA_DIR
         value: /data
+      # Allow the GitHub Pages / Vercel frontend to call this backend
+      # cross-origin. Add your Vercel domain here too if you use one.
+      - key: CLEARFRAME_CORS
+        value: "https://ibrahimmukherjee-boop.github.io"
       # Generated once by Render and kept stable — never the insecure defaults.
       - key: CLEARFRAME_JWT_SECRET
         generateValue: true
