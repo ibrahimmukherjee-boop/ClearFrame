@@ -1,0 +1,50 @@
+databases:
+  - name: clearframe-db
+    plan: basic-256mb
+    databaseName: clearframe
+    user: clearframe
+
+services:
+  - type: web
+    name: clearframe-api
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./services/api/Dockerfile
+    dockerContext: ./services/api
+    healthCheckPath: /api/health
+    autoDeploy: true
+    disk:
+      name: clearframe-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: CLEARFRAME_ENV
+        value: production
+      - key: CLEARFRAME_AUTH
+        value: "true"
+      - key: CLEARFRAME_HSTS
+        value: "false"
+      - key: USE_CLEARFRAME_RUNTIME
+        value: "true"
+      - key: USE_CLEARFRAME_OPS
+        value: "true"
+      - key: USE_OLLAMA
+        value: "false"
+      - key: CLEARFRAME_API_HOST
+        value: 0.0.0.0
+      - key: CLEARFRAME_DATA_DIR
+        value: /data
+      - key: CLEARFRAME_CORS
+        value: https://ibrahimmukherjee-boop.github.io
+      - key: DATABASE_URL
+        fromDatabase:
+          name: clearframe-db
+          property: connectionString
+      - key: CLEARFRAME_JWT_SECRET
+        generateValue: true
+      - key: CLEARFRAME_VAULT_PASSPHRASE
+        generateValue: true
+      - key: CLEARFRAME_AUDIT_SECRET
+        generateValue: true
+      - key: CLEARFRAME_ADMIN_PASSWORD
+        generateValue: true
