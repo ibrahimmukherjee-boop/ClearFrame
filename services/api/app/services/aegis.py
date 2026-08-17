@@ -19,6 +19,7 @@ def _status_from_alignment(alignment: int, tool: str) -> str:
 
 def enqueue_from_audit(session_id: str, audit_entries: list[dict[str, Any]]) -> None:
     sid = session_id.replace("-", "")[:8]
+    queued: list[tuple[str, str, int, str, str]] = []
     with get_conn() as conn:
         conn.execute("DELETE FROM tool_calls WHERE session_id = ?", (session_id,))
         for i, entry in enumerate(audit_entries):
@@ -33,11 +34,14 @@ def enqueue_from_audit(session_id: str, audit_entries: list[dict[str, Any]]) -> 
                 "INSERT OR REPLACE INTO tool_calls (id, session_id, tool, args, alignment, status, reasoning) VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (tc_id, session_id, tool, entry.get("action", ""), alignment, status, reasoning),
             )
-            action_audit_svc.log_action(
-                session_id, "", "",
-                tool, {"args": entry.get("action", "")},
-                reasoning=reasoning, alignment=alignment, status=status,
-            )
+            queued.append((tool, entry.get("action", ""), alignment, status, reasoning))
+    # Log after releasing the SQLite write lock (nested get_conn deadlocks otherwise).
+    for tool, action, alignment, status, reasoning in queued:
+        action_audit_svc.log_action(
+            session_id, "", "",
+            tool, {"args": action},
+            reasoning=reasoning, alignment=alignment, status=status,
+        )
 
 
 def enqueue_session(session_id: str, agent_name: str, trust_level: str) -> None:

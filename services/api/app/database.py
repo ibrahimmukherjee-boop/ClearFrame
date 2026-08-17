@@ -241,8 +241,10 @@ def get_conn() -> Iterator[CompatConnection]:
         finally:
             conn.close()
     else:
-        raw = sqlite3.connect(DB_PATH)
+        raw = sqlite3.connect(DB_PATH, timeout=30)
         raw.row_factory = sqlite3.Row
+        raw.execute("PRAGMA journal_mode=WAL")
+        raw.execute("PRAGMA busy_timeout=30000")
         try:
             yield CompatConnection(raw)
             raw.commit()
