@@ -13,6 +13,8 @@ from app.production import is_production
 
 HITL_TIMEOUT_SEC = int(os.environ.get("CLEARFRAME_HITL_TIMEOUT_SEC", "120"))
 HITL_AUTO_APPROVE = os.environ.get("CLEARFRAME_HITL_AUTO_APPROVE", "").lower() in {"1", "true", "yes"}
+# Default async: enqueue for Aegis console approval instead of blocking the HTTP request.
+HITL_BLOCKING = os.environ.get("CLEARFRAME_HITL_BLOCKING", "false").lower() in {"1", "true", "yes"}
 if is_production() and HITL_AUTO_APPROVE:
     HITL_AUTO_APPROVE = False  # never auto-approve in production
 
@@ -100,6 +102,15 @@ async def governed_execute(
 
     if pol["disposition"] == "require_approval":
         call_id = create_pending(session_id, tool, args, alignment, reasoning or f"Step {step}", pol["reasons"])
+        if not HITL_BLOCKING:
+            # Operator decides later via /api/aegis/{id}/approve|block
+            return {
+                "id": f"audit-{step}", "timestamp": ts,
+                "action": f"{tool}({json.dumps(args)[:80]})",
+                "tool": tool, "alignment": alignment,
+                "status": "human_review", "pendingApproval": True,
+                "policyReasons": pol["reasons"], "hitlCallId": call_id, "executed": False,
+            }
         decision = await wait_for_decision(call_id)
         if decision != "approved":
             sonar_svc.record_event(agent.get("name", "unknown"), "hitl_denied", "medium",

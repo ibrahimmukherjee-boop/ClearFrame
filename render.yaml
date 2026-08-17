@@ -30,6 +30,10 @@ services:
         value: "true"
       - key: USE_OLLAMA
         value: "false"
+      - key: CLEARFRAME_HITL_BLOCKING
+        value: "false"
+      - key: CLEARFRAME_HITL_AUTO_APPROVE
+        value: "false"
       - key: CLEARFRAME_API_HOST
         value: 0.0.0.0
       - key: CLEARFRAME_DATA_DIR

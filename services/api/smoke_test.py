@@ -21,7 +21,7 @@ def req(method: str, path: str, body: dict | None = None, auth: bool = True) -> 
         headers["Authorization"] = f"Bearer {TOKEN}"
     r = urllib.request.Request(BASE + path, data=data, headers=headers, method=method)
     try:
-        with urllib.request.urlopen(r, timeout=60) as resp:
+        with urllib.request.urlopen(r, timeout=90) as resp:
             raw = resp.read().decode()
             parsed: dict | list | str = json.loads(raw) if raw else {}
             return resp.status, parsed
