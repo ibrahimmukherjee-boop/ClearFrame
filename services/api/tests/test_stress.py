@@ -9,8 +9,15 @@ import time
 import urllib.error
 import urllib.request
 
+import pytest
+
 API = os.environ.get("STRESS_API_URL", "http://127.0.0.1:8080")
 RESULTS: list[str] = []
+
+
+@pytest.fixture(scope="module", name="token")
+def token_fixture() -> str:
+    return login()
 
 
 def req(method: str, path: str, body: dict | None = None, token: str | None = None) -> tuple[int, dict]:

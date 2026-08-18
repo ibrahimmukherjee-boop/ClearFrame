@@ -42,9 +42,10 @@ def test_vault_overwrite_key(tmp_vault: Vault) -> None:
     assert tmp_vault.get("key") == "updated"
 
 
-def test_vault_missing_key_returns_none(tmp_vault: Vault) -> None:
+def test_vault_missing_key_raises(tmp_vault: Vault) -> None:
     tmp_vault.unlock("password")
-    assert tmp_vault.get("nonexistent") is None
+    with pytest.raises(VaultError):
+        tmp_vault.get("nonexistent")
 
 
 def test_vault_lock_clears_state(tmp_vault: Vault) -> None:

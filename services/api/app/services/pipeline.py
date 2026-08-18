@@ -20,8 +20,7 @@ def get_pipeline_log() -> list[str]:
 
 
 def run_full_pipeline() -> dict[str, Any]:
-    import asyncio
-    return asyncio.get_event_loop().run_until_complete(_run_full_pipeline_async())
+    return asyncio.run(_run_full_pipeline_async())
 
 
 async def _run_full_pipeline_async() -> dict[str, Any]:
