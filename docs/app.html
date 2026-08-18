@@ -262,6 +262,173 @@ label{display:block;font-family:var(--mono);font-size:.58rem;letter-spacing:.12e
   <footer class="footer"><div><span class="reddot"></span>SafePulse · TrustRegistry · Aegis · Sonar</div><div>ClearFrame · ISO 42001 · EU AI Act</div></footer>
 </div>
 <script>
+/* In-browser demo runtime — implements the API surface with localStorage state so the
+   console works on GitHub Pages with no backend. Live mode is untouched. */
+window.CF_DEMO = localStorage.getItem("clearframe_demo") === "1";
+(function () {
+  if (!window.CF_DEMO) return;
+  const KEY = "cf_demo_state_v1";
+  const uid = p => p + "-" + Math.random().toString(16).slice(2, 10);
+  const ts = () => new Date().toTimeString().slice(0, 8);
+  const DEFAULT_STATE = () => ({
+    agents: [
+      { agentId: "agt-7f3a9b", name: "CodeReviewer-Alpha", description: "Automated code review", capabilities: ["file_read", "git_read"], provider: "ollama", model: "llama3", trustScore: 94, status: "active", isCurrent: false },
+      { agentId: "agt-2e8c1d", name: "DataAnalyst-Beta", description: "Data analysis", capabilities: ["database_read", "chart_generate"], provider: "ollama", model: "llama3", trustScore: 87, status: "active", isCurrent: false },
+      { agentId: "agt-5b1f4e", name: "SupportBot-Gamma", description: "Customer support", capabilities: ["web_search", "email_send"], provider: "ollama", model: "llama3", trustScore: 45, status: "suspended", isCurrent: false }
+    ],
+    operator: null, cert: null, audit: [], toolCalls: [],
+    threats: [
+      { id: "evt-1", timestamp: "14:32:08", agent: "CodeReviewer-Alpha", type: "policy_violation", severity: "high", description: "Attempted file access outside allowed scope" },
+      { id: "evt-2", timestamp: "14:31:45", agent: "SupportBot-Gamma", type: "anomaly", severity: "medium", description: "Unusual query pattern detected" },
+      { id: "evt-3", timestamp: "14:30:12", agent: "DataAnalyst-Beta", type: "credential_abuse", severity: "critical", description: "API key used from unknown IP range" },
+      { id: "evt-4", timestamp: "14:28:33", agent: "CodeReviewer-Alpha", type: "insider_threat", severity: "low", description: "Off-hours activity pattern" }
+    ],
+    policies: [
+      { id: "pol-block-delete", name: "Block file deletion", rule: { tool: "file_delete", action: "deny" }, priority: 100 },
+      { id: "pol-hitl-email", name: "HITL for outbound email", rule: { tool: "email_send", action: "require_approval" }, priority: 90 },
+      { id: "pol-hitl-shell", name: "HITL for shell execution", rule: { tool: "shell_exec", action: "require_approval" }, priority: 85 },
+      { id: "pol-block-drop", name: "Block destructive SQL", rule: { tool: "db_query", pattern: "DROP|DELETE|TRUNCATE", action: "deny" }, priority: 100 },
+      { id: "pol-trust-shell", name: "Shell requires elevated trust", rule: { tool: "shell_exec", min_trust_score: 80, action: "deny" }, priority: 95 }
+    ],
+    workflows: [], evidence: [], pipelineLog: []
+  });
+  let S;
+  try { S = JSON.parse(localStorage.getItem(KEY)) || DEFAULT_STATE(); } catch { S = DEFAULT_STATE(); }
+  const save = () => localStorage.setItem(KEY, JSON.stringify(S));
+  save();
+  const current = () => S.agents.find(a => a.isCurrent) || null;
+  const log = m => S.pipelineLog.push("[" + ts() + "] " + m);
+  const threat = (agent, type, severity, description) => S.threats.unshift({ id: uid("evt"), timestamp: ts(), agent, type, severity, description });
+  const threatScore = () => Math.min(95, S.threats.reduce((s, t) => s + ({ low: 3, medium: 8, high: 15, critical: 25 }[t.severity] || 5), 30));
+  const compare = (a, b) => { const n = Math.min(a.length, b.length); if (!n) return 0; let d = 0; for (let i = 0; i < n; i++) { const m = Math.max(a[i], b[i]) || 1; d += Math.abs(a[i] - b[i]) / m; } return Math.max(0, Math.min(1, 1 - d / n)); };
+
+  function startSession() {
+    const agent = current();
+    if (!agent) return { ok: false, message: "No agent selected. Save or select an agent first." };
+    if (!S.operator || !S.operator.verified) return { ok: false, message: "Operator not verified via SafePulse." };
+    if (!S.cert || S.cert.revoked) return { ok: false, message: "No valid TrustRegistry certificate." };
+    if (agent.status === "suspended") return { ok: false, message: "Agent is suspended. Activate before starting a session." };
+    const sid = uid("sess");
+    const caps = agent.capabilities || [];
+    const plan = [];
+    if (caps.includes("web_search")) plan.push(["web_search", 'query: "enterprise security"', 95, "allowed", "Research step within goal manifest"]);
+    if (caps.includes("file_read")) plan.push(["file_read", 'path: "/data/report.csv"', 95, "allowed", "Read permitted data file"]);
+    else plan.push(["file_read", 'path: "/etc/passwd"', 15, "blocked", "Outside permitted scope — blocked by Aegis"]);
+    if (caps.includes("email_send") || caps.includes("send_email")) plan.push(["email_send", 'to: "report@company.com"', 55, "human_review", "Policy: HITL required for outbound email"]);
+    if (caps.includes("database_read")) plan.push(["database_read", 'table: "customers"', 92, "allowed", "Read-only query within manifest"]);
+    const entries = plan.map(([tool, args, alignment, status, reasoning], i) => ({ id: "audit-" + i, timestamp: ts(), tool, action: tool + "(" + args + ")", args, alignment, status, reasoning }));
+    S.audit = entries;
+    const tag = sid.replace("sess-", "");
+    entries.forEach((e, i) => S.toolCalls.unshift({ id: "tc-" + tag + "-" + (i + 1), sessionId: sid, tool: e.tool, args: e.args, alignment: e.alignment, status: e.status, reasoning: e.reasoning }));
+    if (entries.some(e => e.status === "blocked")) threat(agent.name, "policy_violation", "high", "Blocked tool call outside manifest scope");
+    threat(agent.name, "drift", "medium", "Behavioural drift check on " + sid);
+    log("Session started " + sid + " (in-browser demo runtime)");
+    save();
+    return { ok: true, message: "Session " + sid + " started via in-browser demo runtime", session: { sessionId: sid, agentId: agent.agentId, status: "running" }, auditLog: entries };
+  }
+
+  window.demoApi = async function (path, opts) {
+    const method = ((opts && opts.method) || "GET").toUpperCase();
+    let body = {};
+    try { body = opts && opts.body ? JSON.parse(opts.body) : {}; } catch (e) {}
+    let m;
+    if (path === "/api/health") return { status: "ok", service: "clearframe-demo", version: "demo", database: "in-browser", clearframeRuntime: true, authRequired: false, toolCount: 15, agentOps: { running: false } };
+    if (path === "/api/agents" && method === "GET") return S.agents;
+    if (path === "/api/agents" && method === "POST") {
+      const a = { agentId: uid("agt"), name: body.name || "agent", description: body.description || "", capabilities: body.capabilities || [], provider: body.provider || "ollama", model: body.model || "llama3", trustScore: 100, status: "active", allowWeb: !!body.allowWeb, allowFs: !!body.allowFs, allowExec: !!body.allowExec, isCurrent: false };
+      S.agents.unshift(a); log("Agent defined " + a.name + " (" + a.agentId + ")"); save(); return a;
+    }
+    if ((m = path.match(/^\/api\/agents\/([^/]+)\/(select|suspend|activate)$/))) {
+      const a = S.agents.find(x => x.agentId === m[1]); if (!a) return { detail: "Agent not found" };
+      if (m[2] === "select") { S.agents.forEach(x => x.isCurrent = false); a.isCurrent = true; }
+      if (m[2] === "suspend") { a.status = "suspended"; a.trustScore = Math.max(0, a.trustScore - 20); log("Agent suspended " + a.agentId); }
+      if (m[2] === "activate") a.status = "active";
+      save(); return a;
+    }
+    if (path === "/api/safepulse/enroll") { S.operator = { operatorId: uid("op"), profile: body.profile || [], verified: false, trustScore: 0 }; log("SafePulse profile enrolled"); save(); return { enrolled: true, operatorId: S.operator.operatorId }; }
+    if (path === "/api/safepulse/verify") {
+      if (!S.operator) return { success: false, score: 0, message: "No enrolled profile" };
+      const score = Math.round(compare(S.operator.profile, body.profile || []) * 100);
+      const success = score >= 70; S.operator.verified = success; S.operator.trustScore = score / 100;
+      log("SafePulse auth " + (success ? "PASS" : "FAIL") + " score=" + (score / 100).toFixed(2)); save();
+      return { success, score, operatorId: S.operator.operatorId };
+    }
+    if (path === "/api/trust/issue") {
+      const a = current(); if (!a) return { ok: false, message: "Select an agent first." };
+      S.cert = { certId: uid("cert"), agentId: a.agentId, trustLevel: body.trustLevel || "STANDARD", capabilities: a.capabilities, issuedAt: Date.now() / 1000, expiresAt: Date.now() / 1000 + (body.ttlHours || 24) * 3600, revoked: false, signature: "hmac-sha256:demo" };
+      log("Certificate issued " + S.cert.certId + " (" + S.cert.trustLevel + ")"); save();
+      return { ok: true, message: "Certificate issued", cert: S.cert };
+    }
+    if (path === "/api/trust/verify") { if (!S.cert) return { ok: false, message: "No certificate issued." }; if (S.cert.revoked) return { ok: false, message: "Certificate " + S.cert.certId + " is REVOKED." }; return { ok: true, message: "Certificate " + S.cert.certId + " is VALID at trust level " + S.cert.trustLevel + "." }; }
+    if (path === "/api/trust/revoke") { if (!S.cert) return { ok: false, message: "No certificate to revoke." }; S.cert.revoked = true; log("Certificate revoked " + S.cert.certId); save(); return { ok: true, message: "Certificate " + S.cert.certId + " has been REVOKED." }; }
+    if (path === "/api/state") return { cert: S.cert, agent: current(), operator: S.operator };
+    if (path === "/api/sessions/start") return startSession();
+    if (path === "/api/sessions/audit") return S.audit;
+    if (path === "/api/aegis/calls") return S.toolCalls;
+    if ((m = path.match(/^\/api\/aegis\/([^/]+)\/(approve|block)$/))) {
+      const c = S.toolCalls.find(x => x.id === m[1]);
+      if (c) { c.status = m[2] === "approve" ? "approved" : "blocked"; if (m[2] === "block") threat(current() ? current().name : "operator", "hitl_denied", "medium", "Operator blocked " + c.tool); log("Aegis " + m[2] + " " + c.tool + " (" + c.id + ")"); save(); }
+      return { status: m[2] === "approve" ? "approved" : "blocked" };
+    }
+    if (path === "/api/sonar/scan") {
+      const text = (body.prompt || "").toLowerCase();
+      const blocked = ["ignore previous", "ignore all previous", "exfiltrate", "admin password", "drop table", "rm -rf", "api key"].some(t => text.includes(t));
+      let type = "ok", severity = "low";
+      if (blocked) { type = "policy_violation"; severity = "critical"; }
+      else if (["unusual", "off-hours", "anomaly"].some(t => text.includes(t))) { type = "anomaly"; severity = "medium"; }
+      const name = current() ? current().name : "operator";
+      if (type !== "ok") { threat(name, type, severity, (body.prompt || "").slice(0, 240)); save(); }
+      return { type, severity, blocked, message: (body.prompt || "").slice(0, 240), score: threatScore() };
+    }
+    if (path === "/api/sonar/threats") return { events: S.threats.slice(0, 50), score: threatScore() };
+    if (path === "/api/policies") return S.policies;
+    if (path === "/api/governance/dashboard") return {
+      mode: "in-browser demo", frameworks: ["ISO 42001", "EU AI Act"],
+      agents: S.agents.length, activeAgents: S.agents.filter(a => a.status === "active").length,
+      operatorVerified: !!(S.operator && S.operator.verified), certificateValid: !!(S.cert && !S.cert.revoked),
+      hitlPending: S.toolCalls.filter(c => ["human_review", "pending_approval"].includes(c.status)).length,
+      threats: S.threats.length, threatScore: threatScore(),
+      evidenceCollected: S.evidence.length, auditIntegrity: "verified (demo chain)"
+    };
+    if (path === "/api/governance/evidence") {
+      const items = [
+        { controlId: "8.1", type: "agent_lifecycle", data: { agents: S.agents.length, active: S.agents.filter(a => a.status === "active").length } },
+        { controlId: "8.3", type: "human_oversight", data: { hitl_pending: S.toolCalls.filter(c => ["human_review", "pending_approval"].includes(c.status)).length, hitl_enabled: true } },
+        { controlId: "9.2", type: "audit_integrity", data: { valid: true, count: S.audit.length } },
+        { controlId: "6.1", type: "risk_monitoring", data: { threats: S.threats.length, threatScore: threatScore() } }
+      ];
+      S.evidence = S.evidence.concat(items); save();
+      return { collected: items.length, evidence: items };
+    }
+    if (path === "/api/workflows" && method === "GET") return S.workflows;
+    if (path === "/api/workflows" && method === "POST") { const w = { workflowId: uid("wf"), name: body.name || "workflow", description: body.description || "", steps: body.steps || [], status: "active" }; S.workflows.unshift(w); save(); return w; }
+    if ((m = path.match(/^\/api\/workflows\/([^/]+)\/run$/))) {
+      const w = S.workflows.find(x => x.workflowId === m[1]); if (!w) return { ok: false, message: "Workflow not found" };
+      const results = w.steps.map((s, i) => ({ step: i + 1, goal: s.goal || "step " + (i + 1), result: startSession() }));
+      save(); return { ok: true, runId: uid("run"), results };
+    }
+    if (path === "/api/pipeline/run") {
+      const steps = [];
+      if (!current()) {
+        const a = { agentId: uid("agt"), name: "Customer Support Bot", description: "Answer customer tickets accurately and politely", capabilities: ["web_search", "email_send"], provider: "ollama", model: "llama3", trustScore: 100, status: "active", isCurrent: true };
+        S.agents.forEach(x => x.isCurrent = false); S.agents.unshift(a);
+      }
+      steps.push({ id: "builder", status: "complete" });
+      S.operator = { operatorId: uid("op"), profile: [120, 95, 110, 88, 102], verified: true, trustScore: 0.98 };
+      log("SafePulse auth PASS score=0.98"); steps.push({ id: "safepulse", status: "complete" });
+      const a = current();
+      S.cert = { certId: uid("cert"), agentId: a.agentId, trustLevel: "STANDARD", capabilities: a.capabilities, revoked: false, signature: "hmac-sha256:demo" };
+      log("Certificate issued " + S.cert.certId + " (STANDARD)"); steps.push({ id: "trustregistry", status: "complete" });
+      const sess = startSession();
+      if (!sess.ok) { save(); return { ok: false, message: sess.message, steps }; }
+      steps.push({ id: "clearframe", status: "complete" }, { id: "aegis", status: "complete" }, { id: "sonar", status: "complete" });
+      log("Full pipeline completed successfully"); save();
+      return { ok: true, message: "Full pipeline executed successfully (in-browser demo)", steps, pipelineLog: S.pipelineLog.slice(-12) };
+    }
+    if (path === "/api/pipeline/reset") { S = DEFAULT_STATE(); save(); return { ok: true, message: "Demo sandbox reset to defaults." }; }
+    return { detail: "Demo route not implemented: " + method + " " + path };
+  };
+})();
 (function () {
   const DEFAULT_API = "https://clearframe-api.onrender.com";
   let API_BASE = (localStorage.getItem("nexus_api_base") || DEFAULT_API).replace(/\/+$/, "");
@@ -271,10 +438,14 @@ label{display:block;font-family:var(--mono);font-size:.58rem;letter-spacing:.12e
   $("who").textContent = user.email || user.name || "operator";
   $("conn-url").value = API_BASE;
 
+  if (window.CF_DEMO) $("who").textContent = (user.email || "demo") + " · demo mode";
+
   window.logout = function () {
     localStorage.removeItem("erasys_access_token");
     localStorage.removeItem("erasys_refresh_token");
     localStorage.removeItem("erasys_user");
+    localStorage.removeItem("clearframe_demo");
+    localStorage.removeItem("cf_demo_state_v1");
     sessionStorage.clear();
     location.href = "./index.html";
   };
@@ -286,6 +457,7 @@ label{display:block;font-family:var(--mono);font-size:.58rem;letter-spacing:.12e
     return h;
   }
   async function req(path, opts) {
+    if (window.CF_DEMO) return window.demoApi(path, opts);
     const r = await fetch(API_BASE + path, { cache: "no-store", headers: headers(), ...opts });
     const text = await r.text();
     let data = {};
@@ -301,6 +473,14 @@ label{display:block;font-family:var(--mono);font-size:.58rem;letter-spacing:.12e
   }
 
   async function health() {
+    if (window.CF_DEMO) {
+      setConn("ok", "in-browser demo · full pipeline, no backend");
+      $("health-card").innerHTML = `<div class="chunk answer"><div class="n">ok</div><div>
+        <div class="what">ClearFrame demo runtime</div>
+        <div class="how">state persists in this browser · sign out to reset · live mode: see DEPLOYMENT.md</div>
+      </div></div>`;
+      return true;
+    }
     setConn("wait", "Checking…");
     try {
       const d = await fetch(API_BASE + "/api/health", { cache: "no-store" }).then(r => r.json());
@@ -316,9 +496,18 @@ label{display:block;font-family:var(--mono);font-size:.58rem;letter-spacing:.12e
       return false;
     }
   }
-  window.connect = function () {
+  window.connect = async function () {
     API_BASE = $("conn-url").value.trim().replace(/\/+$/, "") || DEFAULT_API;
     localStorage.setItem("nexus_api_base", API_BASE);
+    if (window.CF_DEMO) {
+      // Switching from demo to a live backend: verify it, then hand over to the login page.
+      try {
+        const d = await fetch(API_BASE + "/api/health", { cache: "no-store" }).then(r => r.json());
+        if (d.status === "ok") { logout(); return; }
+      } catch (e) {}
+      setConn("ok", "in-browser demo · backend at that URL is unreachable");
+      return;
+    }
     health();
   };
   window.show = function (name) {

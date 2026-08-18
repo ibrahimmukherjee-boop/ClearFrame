@@ -56,6 +56,7 @@ input:focus { box-shadow: inset 5px 5px 10px rgba(20,20,18,.16), inset -4px -4px
 .btn { width: 100%; border: none; border-radius: 12px; padding: .95rem 1rem; font-family: var(--font); font-weight: 600; font-size: .95rem; cursor: pointer; background: var(--ink); color: var(--paper); box-shadow: 8px 8px 20px rgba(20,20,18,.22), -6px -6px 14px rgba(255,255,255,.85); transition: transform .12s ease; }
 .btn:hover { transform: translateY(-1px); } .btn:active { transform: scale(.985); }
 .btn-sm { width: auto; padding: .55rem .8rem; font-size: .72rem; background: var(--paper); color: var(--ink); }
+.btn-demo { margin-top: .65rem; background: var(--paper); color: var(--ink); box-shadow: var(--raise); }
 .error { display: none; margin-bottom: 1rem; padding: .65rem .85rem; border-radius: 10px; background: rgba(194,47,47,.08); border: 1px solid rgba(194,47,47,.3); color: var(--red); font-size: .83rem; }
 .error.show { display: block; }
 .ok { display: none; margin-bottom: 1rem; padding: .65rem .85rem; border-radius: 10px; box-shadow: var(--sink); color: var(--ok); font-size: .78rem; font-family: var(--mono); }
@@ -90,7 +91,8 @@ input:focus { box-shadow: inset 5px 5px 10px rgba(20,20,18,.16), inset -4px -4px
     <label for="password">Password</label>
     <input id="password" name="password" type="password" required placeholder="Password from Render env" />
     <button class="btn" type="submit">Sign in</button>
-    <p class="hint">Live FastAPI + Postgres on Render. Default user <b>admin@erasys.local</b>. Password is <code>CLEARFRAME_ADMIN_PASSWORD</code> in the Render dashboard.</p>
+    <button class="btn btn-demo" type="button" id="demo-btn">Launch instant demo — no backend needed</button>
+    <p class="hint">The demo runs the full governed pipeline in your browser.<br />For live mode: FastAPI + Postgres (see <b>DEPLOYMENT.md</b>) · user <b>admin@erasys.local</b>.</p>
     <div class="footer"><span><span class="reddot"></span>Aegis · SafePulse · Sonar</span><span>ISO 42001</span></div>
   </form>
 </main>
@@ -117,7 +119,7 @@ input:focus { box-shadow: inset 5px 5px 10px rgba(20,20,18,.16), inset -4px -4px
       localStorage.setItem("nexus_api_base", base());
       return true;
     } catch (e) {
-      healthEl.textContent = "Backend unreachable — start the Render service, then ping again.";
+      healthEl.textContent = "Backend offline — use the instant demo below, or deploy the API (DEPLOYMENT.md).";
       healthEl.style.color = "var(--red)";
       return false;
     }
@@ -125,6 +127,13 @@ input:focus { box-shadow: inset 5px 5px 10px rgba(20,20,18,.16), inset -4px -4px
 
   document.getElementById("ping").addEventListener("click", ping);
   ping();
+
+  document.getElementById("demo-btn").addEventListener("click", function () {
+    localStorage.setItem("clearframe_demo", "1");
+    localStorage.setItem("erasys_access_token", "demo-token");
+    localStorage.setItem("erasys_user", JSON.stringify({ email: "demo@clearframe.dev", name: "Demo Operator", role: "admin" }));
+    location.href = "./app.html";
+  });
 
   if (localStorage.getItem("erasys_access_token")) {
     location.replace("./app.html");
