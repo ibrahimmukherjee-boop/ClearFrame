@@ -28,18 +28,18 @@ body { font-family: var(--font); color: var(--ink); background: var(--paper); -w
   background: repeating-linear-gradient(90deg, var(--ink) 0 1px, transparent 1px 9px);
   mask-image: radial-gradient(ellipse 55% 45% at 78% 24%, black, transparent 70%);
 }
-.sheets { position: fixed; right: -40px; bottom: -30px; z-index: 0; pointer-events: none; width: 340px; height: 340px; opacity: .9; }
-.sheets div { position: absolute; right: 0; bottom: 0; background: linear-gradient(160deg, rgba(20,20,18,.85), rgba(20,20,18,.25)); transform: skewX(-14deg); }
-.sheets div:nth-child(1) { width: 220px; height: 200px; right: 10px; bottom: 130px; opacity: .85; }
-.sheets div:nth-child(2) { width: 180px; height: 160px; right: 40px; bottom: 84px; opacity: .6; }
-.sheets div:nth-child(3) { width: 140px; height: 120px; right: 66px; bottom: 48px; opacity: .4; }
-.sheets div:nth-child(4) { width: 100px; height: 80px; right: 88px; bottom: 22px; opacity: .25; }
-.sheets div:nth-child(5) { width: 64px; height: 46px; right: 106px; bottom: 4px; opacity: .15; }
+.caps { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+.caps span { position: absolute; border-radius: 999px; background: linear-gradient(175deg, rgba(255,255,255,.9), rgba(20,20,18,.04) 55%, rgba(20,20,18,.1)); box-shadow: inset 0 0 0 1px rgba(255,255,255,.75), 14px 20px 44px rgba(20,20,18,.07); }
+.caps span:nth-child(1) { width: 170px; height: 470px; right: -50px; top: -110px; opacity: .5; }
+.caps span:nth-child(2) { width: 120px; height: 330px; right: 140px; top: -160px; opacity: .32; }
+.caps span:nth-child(3) { width: 100px; height: 280px; left: -36px; bottom: -120px; opacity: .3; }
+.caps span:nth-child(4) { width: 74px; height: 200px; left: 90px; bottom: -140px; opacity: .2; }
 .shell { position: relative; z-index: 1; min-height: 100vh; display: grid; place-items: center; padding: 1.5rem; }
 .card {
-  width: min(430px, 100%); background: var(--paper); border-radius: 22px;
+  position: relative; width: min(430px, 100%); background: var(--paper); border-radius: 22px;
   padding: 2rem 1.75rem 1.5rem; box-shadow: 12px 12px 32px rgba(20,20,18,.14), -10px -10px 26px rgba(255,255,255,.9), inset 0 0 0 1px rgba(255,255,255,.5);
 }
+.card::before { content: ""; position: absolute; inset: 0; border-radius: 22px; background: linear-gradient(150deg, rgba(255,255,255,.5), rgba(255,255,255,0) 40%); pointer-events: none; }
 .brand { display: flex; align-items: center; gap: .85rem; margin-bottom: 1.1rem; }
 .mark { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: var(--paper); box-shadow: var(--raise); }
 .mark svg { width: 22px; height: 22px; }
@@ -71,7 +71,7 @@ input:focus { box-shadow: inset 5px 5px 10px rgba(20,20,18,.16), inset -4px -4px
 </head>
 <body>
 <div class="grain"></div><div class="rays"></div>
-<div class="sheets" aria-hidden="true"><div></div><div></div><div></div><div></div><div></div></div>
+<div class="caps" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
 <main class="shell">
   <form class="card" id="login-form" autocomplete="on">
     <div class="brand">
