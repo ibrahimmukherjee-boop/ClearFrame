@@ -108,6 +108,10 @@ def init_auth_db() -> None:
                 expires_at REAL,
                 created_at REAL
             );
+            CREATE TABLE IF NOT EXISTS login_attempts (
+                email TEXT NOT NULL,
+                attempted_at REAL NOT NULL
+            );
             """
         )
         count = conn.execute("SELECT COUNT(*) AS c FROM users").fetchone()["c"]
@@ -157,15 +161,47 @@ def _ensure_team_users() -> None:
                 )
 
 
+LOGIN_MAX_ATTEMPTS = int(__import__("os").environ.get("CLEARFRAME_LOGIN_MAX_ATTEMPTS", "5"))
+LOGIN_LOCKOUT_SEC = int(__import__("os").environ.get("CLEARFRAME_LOGIN_LOCKOUT_SEC", "900"))
+
+
+class LoginLocked(Exception):
+    """Raised when an account is temporarily locked after repeated failures."""
+
+    def __init__(self, retry_after: int) -> None:
+        self.retry_after = retry_after
+        super().__init__(f"locked for {retry_after}s")
+
+
+def _check_lockout(conn: Any, email: str, now: float) -> None:
+    conn.execute("DELETE FROM login_attempts WHERE attempted_at < ?", (now - LOGIN_LOCKOUT_SEC,))
+    row = conn.execute(
+        "SELECT COUNT(*) AS c, MAX(attempted_at) AS latest FROM login_attempts WHERE email = ?",
+        (email,),
+    ).fetchone()
+    if row["c"] >= LOGIN_MAX_ATTEMPTS:
+        raise LoginLocked(int(row["latest"] + LOGIN_LOCKOUT_SEC - now) + 1)
+
+
 def login(email: str, password: str) -> dict[str, Any] | None:
+    now = time.time()
     with get_conn() as conn:
+        _check_lockout(conn, email, now)
         row = conn.execute("SELECT * FROM users WHERE email = ? AND active = 1", (email,)).fetchone()
     if not row or not _verify_password(password, row["password_hash"]):
+        with get_conn() as conn:
+            conn.execute("INSERT INTO login_attempts (email, attempted_at) VALUES (?, ?)", (email, now))
+            count = conn.execute("SELECT COUNT(*) AS c FROM login_attempts WHERE email = ?", (email,)).fetchone()["c"]
+        if count >= LOGIN_MAX_ATTEMPTS:
+            from app.services import sonar as sonar_svc
+            sonar_svc.record_event("auth", "brute_force", "high",
+                                   f"Account {email} locked after {count} failed logins")
         return None
     user = dict(row)
     token = create_token(user["user_id"], user["email"], user["role"])
     refresh_id = f"rt-{uuid.uuid4().hex}"
     with get_conn() as conn:
+        conn.execute("DELETE FROM login_attempts WHERE email = ?", (email,))
         conn.execute(
             "INSERT INTO refresh_tokens (token_id, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)",
             (refresh_id, user["user_id"], time.time() + 7 * 86400, time.time()),

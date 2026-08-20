@@ -414,7 +414,10 @@ window.CF_DEMO = localStorage.getItem("clearframe_demo") === "1";
     }
     if (path === "/api/pipeline/run") {
       const steps = [];
-      if (!current()) {
+      // Never silently reactivate a suspended agent (suspension is a governance
+      // control) — provision a fresh active agent instead.
+      const cur = current();
+      if (!cur || cur.status !== "active") {
         const a = { agentId: uid("agt"), name: "Customer Support Bot", description: "Answer customer tickets accurately and politely", capabilities: ["web_search", "email_send"], provider: "ollama", model: "llama3", trustScore: 100, status: "active", isCurrent: true };
         S.agents.forEach(x => x.isCurrent = false); S.agents.unshift(a);
       }

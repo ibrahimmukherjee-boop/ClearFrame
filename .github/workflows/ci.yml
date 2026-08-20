@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/api
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: services/api/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest
+
+      - name: Boot API
+        run: |
+          nohup python -m uvicorn app.main:app --port 8080 > /tmp/api.log 2>&1 &
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:8080/api/health > /dev/null && break
+            sleep 1
+          done
+          curl -sf http://127.0.0.1:8080/api/health
+
+      - name: Unit, integration, and stress tests
+        run: python -m pytest -q
+
+      - name: Governance smoke test (end-to-end)
+        run: ADMIN_PASSWORD=admin python smoke_test.py
+
+      - name: Production config gate
+        run: |
+          CLEARFRAME_ENV=production python -c "
+          from app.production import validate_production_config
+          errs = validate_production_config()
+          assert errs, 'gate accepted unsafe production config'
+          print(f'gate rejects unsafe config ({len(errs)} errors)')"
+
+      - name: Server log on failure
+        if: failure()
+        run: cat /tmp/api.log

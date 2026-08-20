@@ -26,7 +26,10 @@ def run_full_pipeline() -> dict[str, Any]:
 async def _run_full_pipeline_async() -> dict[str, Any]:
     steps = []
 
-    if not agents_svc.get_current_agent():
+    # A suspended agent must never be silently reactivated (suspension is a
+    # governance control), so provision a fresh agent instead of reusing it.
+    current = agents_svc.get_current_agent()
+    if not current or current.get("status") != "active":
         preset = agents_svc.PRESETS["Customer Support Bot"]
         agents_svc.save_agent({**preset, "owner": "Pipeline Auto"})
     steps.append({"id": "builder", "status": "complete"})

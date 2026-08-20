@@ -219,7 +219,14 @@ async def health() -> dict[str, Any]:
 
 @app.post("/api/auth/login")
 def login(body: LoginIn) -> dict[str, Any]:
-    result = auth_svc.login(body.email, body.password)
+    try:
+        result = auth_svc.login(body.email, body.password)
+    except auth_svc.LoginLocked as exc:
+        raise HTTPException(
+            429,
+            f"Too many failed attempts. Account locked — try again in {exc.retry_after} seconds.",
+            headers={"Retry-After": str(exc.retry_after)},
+        )
     if not result:
         raise HTTPException(401, "Invalid credentials")
     return result
