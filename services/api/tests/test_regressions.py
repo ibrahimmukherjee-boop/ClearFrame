@@ -9,24 +9,16 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 os.environ.setdefault("CLEARFRAME_AUTH", "false")
 os.environ.setdefault("CLEARFRAME_DATA_DIR", "/tmp/clearframe-test-regressions")
 
-from app.database import init_db
+from app.bootstrap import init_all
 from app.services import auth as auth_svc
 from app.services import agents as agents_svc
-from app.services import governance as gov_svc
 from app.services import pipeline as pipeline_svc
-from app.services import policy as policy_svc
-from app.services import tools as tools_svc
 
 import pytest
 
 
 def setup_module() -> None:
-    init_db()
-    auth_svc.init_auth_db()
-    tools_svc.init_tools_db()
-    gov_svc.init_governance_db()
-    policy_svc.init_policy_db()
-    agents_svc.seed_defaults()
+    init_all()
 
 
 def test_pipeline_recovers_from_suspended_current_agent():

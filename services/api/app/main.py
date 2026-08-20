@@ -44,16 +44,8 @@ from app.production import enforce_or_exit, production_status
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     enforce_or_exit()
-    init_db()
-    auth_svc.init_auth_db()
-    tools_svc.init_tools_db()
-    governance_svc.init_governance_db()
-    policy_svc.init_policy_db()
-    workflows_svc.init_workflows_db()
-    policy_hub_svc.init_policy_hub_db()
-    action_audit_svc.init_action_audit_db()
-    agents_svc.seed_defaults()
-    sonar_svc.seed_defaults()
+    from app.bootstrap import init_all
+    init_all()
     vault_svc.ensure_defaults()
     ops_svc.start_ops_server()
     yield

@@ -23,12 +23,8 @@ from app.services import audit as audit_svc
 
 
 def setup():
-    init_db()
-    auth_svc.init_auth_db()
-    tools_svc.init_tools_db()
-    gov_svc.init_governance_db()
-    policy_svc.init_policy_db()
-    agents_svc.seed_defaults()
+    from app.bootstrap import init_all
+    init_all()
 
 
 def test_iso42001_all_controls_assessed():
