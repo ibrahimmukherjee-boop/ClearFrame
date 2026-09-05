@@ -11,6 +11,7 @@ from app.services import agents as agents_svc
 from app.services import auth as auth_svc
 from app.services import governance as governance_svc
 from app.services import history as history_svc
+from app.services import memory as memory_svc
 from app.services import migrations as migrations_svc
 from app.services import policy as policy_svc
 from app.services import policy_hub as policy_hub_svc
@@ -29,6 +30,7 @@ def init_all(seed: bool = True) -> None:
     policy_hub_svc.init_policy_hub_db()
     action_audit_svc.init_action_audit_db()
     history_svc.init_history_db()
+    memory_svc.init_memory_db()
     migrations_svc.init_migrations_db()
     migrations_svc.run_pending()
     if seed:

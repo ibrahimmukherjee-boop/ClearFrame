@@ -45,6 +45,12 @@ from app.services import idempotency as idem_svc
 from app.services import lineage as lineage_svc
 from app.services import migrations as migrations_svc
 from app.services import tenancy as tenancy_svc
+from app.services import data_access as data_access_svc
+from app.services import memory as memory_svc
+from app.services import otel as otel_svc
+from app.services import cedar_opa as cedar_opa_svc
+from app.services import ranger as ranger_svc
+from app.services import providers as providers_svc
 from app.production import enforce_or_exit, production_status
 
 
@@ -243,12 +249,25 @@ async def health() -> dict[str, Any]:
         "production": production_status(),
         "migrations": migrations_svc.applied(),
         "features": {
-            "federation": True,
+            "federationEngine": True,
+            "agentDataAccess": True,
+            "managedMemory": True,
+            "otelExport": True,
+            "cedarOpaImport": True,
+            "rangerVerify": True,
+            "sonarAiSoc": True,
+            "multiProviderLlm": True,
             "tenancy": True,
             "lineage": True,
             "idempotency": True,
             "backup": True,
             "history": True,
+        },
+        "providers": providers_svc.list_providers(),
+        "product": {
+            "openSource": "ClearFrame",
+            "commercial": "Nexus Protocol (includes SafePulse)",
+            "license": "Apache-2.0 (ClearFrame protocol + control plane)",
         },
     }
 
@@ -867,28 +886,31 @@ class SonarScanIn(BaseModel):
 
 @app.post("/api/sonar/scan")
 def sonar_scan(body: SonarScanIn) -> dict[str, Any]:
-    text = (body.prompt or "").lower()
-    blocked = any(token in text for token in (
-        "ignore previous", "ignore all previous", "exfiltrate", "admin password",
-        "drop table", "rm -rf", "api key",
-    ))
-    if blocked:
-        event_type, severity = "policy_violation", "critical"
-    elif any(token in text for token in ("unusual", "off-hours", "anomaly")):
-        event_type, severity = "anomaly", "medium"
-    else:
-        event_type, severity = "ok", "low"
     agent = agents_svc.get_current_agent()
     name = agent["name"] if agent else "operator"
-    if event_type != "ok":
-        sonar_svc.record_event(name, event_type, severity, (body.prompt or "")[:240])
-    return {
-        "type": event_type,
-        "severity": severity,
-        "blocked": blocked,
-        "message": (body.prompt or "")[:240],
-        "score": sonar_svc.threat_score(),
-    }
+    return sonar_svc.scan_prompt(body.prompt or "", agent_name=name)
+
+
+@app.get("/api/sonar/soc")
+def sonar_soc() -> dict[str, Any]:
+    return sonar_svc.soc_dashboard()
+
+
+@app.get("/api/sonar/playbooks")
+def sonar_playbooks() -> list[dict[str, Any]]:
+    return sonar_svc.list_playbooks()
+
+
+class SonarContainIn(BaseModel):
+    agentId: str | None = None
+    action: str = "suspend"
+    reason: str = "Sonar AI SOC containment"
+
+
+@app.post("/api/sonar/contain")
+def sonar_contain(body: SonarContainIn, user: dict = Depends(get_current_user)) -> dict[str, Any]:
+    require_permission(user, "agents:write")
+    return sonar_svc.contain(body.agentId, body.action, body.reason)
 
 
 @app.post("/api/pipeline/run")
@@ -930,6 +952,144 @@ def vault_set(body: VaultSecretIn, user: dict = Depends(get_current_user)) -> di
 @app.post("/api/roi/calculate")
 def calculate_roi(body: RoiIn) -> dict[str, Any]:
     return roi_svc.calculate(body.agents, body.operators, body.reductionPct)
+
+
+# ── Agent-native data access (no operator SQL) ──────────────────────────────
+
+class DataAskIn(BaseModel):
+    question: str
+    visualize: bool = False
+    agentId: str = ""
+
+
+@app.post("/api/data/ask")
+def data_ask(body: DataAskIn, request: Request, user: dict = Depends(get_current_user)) -> dict[str, Any]:
+    actor = (user or {}).get("email", "operator")
+    return data_access_svc.ask(
+        body.question,
+        tenant_id=tenant_from_request(request),
+        actor=actor,
+        agent_id=body.agentId,
+        visualize=body.visualize,
+    )
+
+
+@app.get("/api/data/catalogs")
+def data_catalogs(request: Request) -> list[dict[str, Any]]:
+    """Catalog metadata for agents / console — not a SQL surface."""
+    return federation_svc.list_catalogs(tenant_from_request(request))
+
+
+# ── Managed memory ──────────────────────────────────────────────────────────
+
+class MemoryLongIn(BaseModel):
+    agentId: str
+    key: str
+    value: Any
+    importance: float = 0.5
+
+
+@app.get("/api/memory/{session_id}")
+def memory_get(session_id: str, request: Request, agentId: str = "") -> dict[str, Any]:
+    return memory_svc.context_bundle(session_id, tenant_from_request(request), agentId)
+
+
+@app.post("/api/memory/long")
+def memory_long_write(body: MemoryLongIn, request: Request) -> dict[str, Any]:
+    mid = memory_svc.remember_long(
+        tenant_from_request(request), body.agentId, body.key, body.value, body.importance
+    )
+    return {"ok": True, "memoryId": mid}
+
+
+# ── Cedar / OPA import ──────────────────────────────────────────────────────
+
+class PolicyImportIn(BaseModel):
+    text: str
+    format: str = "auto"
+
+
+@app.post("/api/policies/import")
+def policy_import(body: PolicyImportIn, user: dict = Depends(get_current_user)) -> dict[str, Any]:
+    actor = (user or {}).get("email", "operator")
+    try:
+        return cedar_opa_svc.import_policy(body.text, body.format, actor=actor)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+
+
+# ── Apache Ranger-style verification ────────────────────────────────────────
+
+class RangerVerifyIn(BaseModel):
+    principal: str
+    resource: str
+    action: str
+    trustScore: float = 100
+    agentStatus: str = "active"
+
+
+@app.post("/api/verify/ranger")
+def ranger_verify(body: RangerVerifyIn) -> dict[str, Any]:
+    return ranger_svc.verify_access(
+        body.principal,
+        body.resource,
+        body.action,
+        {"trustScore": body.trustScore, "agentStatus": body.agentStatus},
+    )
+
+
+@app.get("/api/verify/ranger/portfolio")
+def ranger_portfolio() -> dict[str, Any]:
+    return ranger_svc.verify_agent_portfolio()
+
+
+@app.get("/api/verify/audit-chain")
+def verify_audit_chain() -> dict[str, Any]:
+    return audit_svc.verify_chain()
+
+
+# ── Providers + OTEL ────────────────────────────────────────────────────────
+
+@app.get("/api/providers")
+def list_llm_providers() -> list[dict[str, Any]]:
+    return providers_svc.list_providers()
+
+
+@app.get("/api/providers/{provider}/validate")
+def validate_llm_provider(provider: str) -> dict[str, Any]:
+    return providers_svc.validate_provider_config(provider)
+
+
+@app.get("/api/otel/status")
+def otel_status() -> dict[str, Any]:
+    return {"enabled": otel_svc.OTEL_ENABLED, "path": otel_svc.OTEL_PATH}
+
+
+# ── Policy hub hierarchy + upload ───────────────────────────────────────────
+
+@app.get("/api/governance/hierarchy")
+def policy_hierarchy() -> list[dict[str, Any]]:
+    return policy_hub_svc.hierarchy_tree()
+
+
+class PolicyUploadIn(BaseModel):
+    title: str
+    category: str = "internal"
+    content: str
+    fileName: str = ""
+    version: str = "1.0"
+    parentDocId: str | None = None
+
+
+@app.post("/api/governance/documents/upload")
+def upload_policy_doc(body: PolicyUploadIn) -> dict[str, Any]:
+    try:
+        return policy_hub_svc.upload_document(
+            body.title, body.category, body.content,
+            file_name=body.fileName, version=body.version, parent_doc_id=body.parentDocId,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
 
 
 from pathlib import Path

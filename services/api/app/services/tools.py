@@ -29,6 +29,8 @@ TOOL_CATALOG: list[dict[str, Any]] = [
     {"id": "git_read", "name": "Git Read", "category": "devops", "icon": "git-branch", "requiresKey": False, "description": "Read git repository state"},
     {"id": "git_write", "name": "Git Write", "category": "devops", "icon": "git-commit", "requiresKey": False, "description": "Commit and push changes"},
     {"id": "webhook_send", "name": "Webhook", "category": "integration", "icon": "webhook", "requiresKey": False, "description": "POST to external webhook URLs"},
+    {"id": "data_fetch", "name": "Governed Data Fetch", "category": "data", "icon": "database", "requiresKey": False, "description": "Ask agents to fetch enterprise data via Trino-style federation (no raw SQL)"},
+    {"id": "data_visualize", "name": "Data Visualize", "category": "data", "icon": "bar-chart", "requiresKey": False, "description": "Fetch + chart enterprise data from a natural-language question"},
     {"id": "pdf_read", "name": "PDF Read", "category": "documents", "icon": "file-text", "requiresKey": False, "description": "Extract text from PDF documents"},
     {"id": "chart_generate", "name": "Chart Generate", "category": "data", "icon": "bar-chart", "requiresKey": False, "description": "Generate data visualizations"},
     {"id": "api_call", "name": "REST API", "category": "integration", "icon": "plug", "requiresKey": True, "description": "Call external REST APIs with vault credentials"},
@@ -291,6 +293,22 @@ def _tool_git_read(path: str = ".", **_: Any) -> dict[str, Any]:
         return {"ok": False, "error": str(exc)}
 
 
+def _tool_data_fetch(question: str = "", agent_id: str = "", **_: Any) -> dict[str, Any]:
+    from app.services import data_access
+    try:
+        return data_access.ask(question or "show customers", actor="agent", agent_id=agent_id, visualize=False)
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}
+
+
+def _tool_data_visualize(question: str = "", agent_id: str = "", **_: Any) -> dict[str, Any]:
+    from app.services import data_access
+    try:
+        return data_access.ask(question or "show orders", actor="agent", agent_id=agent_id, visualize=True)
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}
+
+
 TOOL_HANDLERS: dict[str, Callable[..., dict[str, Any]]] = {
     "web_search": _tool_web_search,
     "web_fetch": _tool_web_fetch,
@@ -307,6 +325,8 @@ TOOL_HANDLERS: dict[str, Callable[..., dict[str, Any]]] = {
     "git_write": lambda **_: {"ok": False, "error": "git_write requires GitHub integration — use github.create_issue"},
     "pdf_read": lambda path="", **_: {"ok": True, "path": path, "pages": 1},
     "chart_generate": lambda **_: {"ok": True, "chart": "bar", "generated": True},
+    "data_fetch": _tool_data_fetch,
+    "data_visualize": _tool_data_visualize,
     "db_query": _tool_database_read,
     "api_call": _tool_api_call,
     "file_delete": lambda path="", **_: {"ok": False, "error": "Blocked by policy"},

@@ -137,42 +137,151 @@ def _seed_cards_for_framework(conn, doc_id: str, framework: str) -> None:
 
 
 def parse_content_into_rules(content: str) -> list[tuple[str, str]]:
-    """Parse markdown or plain text into enforceable policy cards."""
+    """NLP-lite parse of markdown/plain text into hierarchical enforceable cards.
+
+    Extracts: markdown headings, numbered rules, MUST/SHALL/MUST NOT statements,
+    and bullet obligations — the patterns auditors actually write into policies.
+    """
     cards: list[tuple[str, str]] = []
-    text = content.strip()
+    text = (content or "").strip()
     if not text:
         return cards
 
-    sections = re.split(r'\n(?=##\s+)', text)
+    # Strip simple PDF/DOCX binary noise if raw bytes were decoded poorly
+    text = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", " ", text)
+
+    sections = re.split(r"\n(?=#{1,3}\s+)", text)
     for section in sections:
         section = section.strip()
         if not section:
             continue
-        if section.startswith('#'):
-            first, _, rest = section.partition('\n')
-            title = first.lstrip('#').strip()
+        if section.startswith("#"):
+            first, _, rest = section.partition("\n")
+            title = first.lstrip("#").strip()
             body = rest.strip() or title
             if title:
-                cards.append((title, body))
+                cards.append((title[:160], body[:1200]))
+
+    # Obligation sentences (MUST / SHALL / MUST NOT / PROHIBITED)
+    for m in re.finditer(
+        r"(?im)^(?:[-*]\s+)?((?:agents?|operators?|users?|systems?|personnel)?[^.\n]{0,40}"
+        r"(?:must not|must|shall not|shall|prohibited|forbidden|required to)[^.\n]{10,200}\.?)",
+        text,
+    ):
+        line = m.group(1).strip()
+        if len(line) > 20:
+            cards.append((line[:120], line))
 
     if not cards:
-        for line in text.split('\n'):
+        for line in text.split("\n"):
             line = line.strip()
             if not line:
                 continue
-            if re.match(r'^(\d+[\.\)]\s|[-*]\s|Rule\s+\d+)', line, re.I):
+            if re.match(r"^(\d+[\.\)]\s|[-*]\s|Rule\s+\d+)", line, re.I):
                 cards.append((line[:120], line))
 
     if not cards:
-        first_line = text.split('\n')[0].strip()[:100]
-        cards.append((first_line or 'Policy requirement', text[:800]))
+        first_line = text.split("\n")[0].strip()[:100]
+        cards.append((first_line or "Policy requirement", text[:800]))
 
-    return cards[:25]
+    # Deduplicate while preserving order
+    seen: set[str] = set()
+    unique: list[tuple[str, str]] = []
+    for t, b in cards:
+        key = t.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append((t, b))
+    return unique[:40]
+
+
+def extract_text_from_upload(file_name: str, raw: bytes | str) -> str:
+    """Extract text from .md/.txt/.pdf/.docx uploads for policy NLP."""
+    name = (file_name or "").lower()
+    if isinstance(raw, str):
+        data = raw.encode("utf-8", errors="ignore")
+        text = raw
+    else:
+        data = raw
+        text = raw.decode("utf-8", errors="ignore")
+
+    if name.endswith((".md", ".txt", ".text", ".csv")):
+        return text
+    if name.endswith(".pdf"):
+        # Minimal PDF text extraction without heavy deps: pull printable strings
+        chunks = re.findall(rb"\((?:\\.|[^\\)]){4,}\)", data)
+        decoded = []
+        for c in chunks:
+            try:
+                s = c[1:-1].decode("utf-8", errors="ignore")
+                s = s.replace("\\n", "\n").replace("\\t", " ")
+                if any(ch.isalpha() for ch in s):
+                    decoded.append(s)
+            except Exception:
+                continue
+        return "\n".join(decoded) if decoded else text
+    if name.endswith((".docx", ".doc")):
+        # DOCX is a zip of XML; pull <w:t> text nodes if present
+        try:
+            import zipfile
+            import io
+            with zipfile.ZipFile(io.BytesIO(data)) as zf:
+                xml = zf.read("word/document.xml").decode("utf-8", errors="ignore")
+            return "\n".join(re.findall(r"<w:t[^>]*>([^<]+)</w:t>", xml))
+        except Exception:
+            return text
+    return text
+
+
+def enforced_cards() -> list[dict[str, Any]]:
+    with get_conn() as conn:
+        rows = conn.execute(
+            """SELECT c.* FROM policy_cards c
+               JOIN policy_documents d ON d.doc_id = c.doc_id
+               WHERE c.enforce = 1 AND d.enforced = 1
+               ORDER BY c.priority DESC"""
+        ).fetchall()
+    return [_serialize_card(dict(r)) for r in rows]
+
+
+def hierarchy_tree() -> list[dict[str, Any]]:
+    """Nested document → card tree for the console."""
+    docs = list_documents()
+    by_parent: dict[str | None, list[dict[str, Any]]] = {}
+    for d in docs:
+        by_parent.setdefault(d.get("parentDocId"), []).append(d)
+
+    def walk(parent_id: str | None, level: int = 0) -> list[dict[str, Any]]:
+        nodes = []
+        for d in by_parent.get(parent_id, []):
+            cards = d.get("cards") or []
+            # Nest cards by parentCardId
+            card_children: dict[str | None, list] = {}
+            for c in cards:
+                card_children.setdefault(c.get("parentCardId"), []).append(c)
+            def walk_cards(pid: str | None) -> list:
+                out = []
+                for c in card_children.get(pid, []):
+                    out.append({**c, "children": walk_cards(c["cardId"])})
+                return out
+            nodes.append({
+                **{k: v for k, v in d.items() if k != "cards"},
+                "level": level,
+                "cards": walk_cards(None),
+                "children": walk(d["docId"], level + 1),
+            })
+        return nodes
+
+    return walk(None)
 
 
 def upload_document(title: str, category: str, content: str, file_name: str = "", version: str = "1.0", parent_doc_id: str | None = None, hierarchy_level: int = 0) -> dict[str, Any]:
     if category not in CATEGORIES:
         raise ValueError(f"Invalid category: {category}")
+    # If content looks like a path placeholder with binary already extracted upstream, parse filename
+    if file_name:
+        content = extract_text_from_upload(file_name, content) or content
     doc_id = f"doc-{uuid.uuid4().hex[:8]}"
     with get_conn() as conn:
         conn.execute(
@@ -181,8 +290,19 @@ def upload_document(title: str, category: str, content: str, file_name: str = ""
             (doc_id, title, category, content, file_name, version, hierarchy_level, parent_doc_id, time.time(), time.time()),
         )
     rules = parse_content_into_rules(content)
+    parent_card = None
     for i, (rule_title, rule_body) in enumerate(rules):
-        create_card(doc_id, rule_title, rule_body, priority=max(50, 95 - i * 5), hierarchy_order=i, enforce=True)
+        # First card is root; subsequent MUST NOT cards nest under root for hierarchy display
+        card = create_card(
+            doc_id, rule_title, rule_body,
+            priority=max(40, 100 - i * 3),
+            hierarchy_order=i,
+            parent_card_id=parent_card if i > 0 and i < 4 else None,
+            enforce=True,
+            tags=["nlp-parsed", "enforced"],
+        )
+        if i == 0:
+            parent_card = card.get("cardId")
     return get_document(doc_id)
 
 

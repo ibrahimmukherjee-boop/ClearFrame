@@ -90,7 +90,13 @@ def list_policies() -> list[dict[str, Any]]:
 
 
 def evaluate(tool: str, args: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
-    """Returns {allowed, disposition, matchedPolicies, reasons}."""
+    """Returns {allowed, disposition, matchedPolicies, reasons}.
+
+    Evaluates runtime_policies AND enforced document policy cards so uploaded
+    PDF/MD/DOCX policies are hard-gates, not advisory text.
+    """
+    from app.services import policy_hub as policy_hub_svc
+
     policies = list_policies()
     matched: list[str] = []
     reasons: list[str] = []
@@ -110,18 +116,47 @@ def evaluate(tool: str, args: dict[str, Any], context: dict[str, Any]) -> dict[s
             disposition = "require_approval"
             reasons.append(f"Policy '{pol['name']}' requires approval for {tool}")
 
-    result = {
+    # Document-card hard enforcement (NLP-parsed uploads)
+    if disposition != "deny":
+        for card in policy_hub_svc.enforced_cards():
+            text = f"{card.get('title', '')} {card.get('content', '')}".lower()
+            tool_l = tool.lower()
+            if tool_l not in text and not any(k in text for k in (tool_l.replace("_", " "),)):
+                # Also match common capability synonyms
+                synonyms = {
+                    "shell_exec": ["shell", "command execution", "bash"],
+                    "email_send": ["email", "outbound mail"],
+                    "file_delete": ["delete file", "file deletion"],
+                    "data_fetch": ["exfiltrat", "personal data", "customer data"],
+                }
+                if not any(s in text for s in synonyms.get(tool, [])):
+                    continue
+            if any(w in text for w in ("must not", "shall not", "prohibit", "forbidden", "unauthorized", "blocked")):
+                disposition = "deny"
+                matched.append(card["cardId"])
+                reasons.append(f"Document policy '{card['title']}' forbids {tool}")
+                break
+            if any(w in text for w in ("require approval", "human oversight", "human-in-the-loop", "must be approved")):
+                if disposition == "allow":
+                    disposition = "require_approval"
+                matched.append(card["cardId"])
+                reasons.append(f"Document policy '{card['title']}' requires human oversight for {tool}")
+
+    _log_evaluation(matched, tool, disposition, context)
+    return {
         "allowed": disposition == "allow",
         "disposition": disposition,
         "matchedPolicies": matched,
         "reasons": reasons,
     }
+
+
+def _log_evaluation(matched: list[str], tool: str, disposition: str, context: dict[str, Any]) -> None:
     with get_conn() as conn:
         conn.execute(
             "INSERT INTO policy_evaluations (policy_id, tool, decision, context, evaluated_at) VALUES (?, ?, ?, ?, ?)",
             (matched[0] if matched else None, tool, disposition, json.dumps(context)[:500], time.time()),
         )
-    return result
 
 
 def _matches(rule: dict[str, Any], tool: str, args: dict[str, Any], context: dict[str, Any]) -> bool:

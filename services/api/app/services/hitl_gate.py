@@ -123,11 +123,22 @@ async def governed_execute(
                 "policyReasons": pol["reasons"], "hitlCallId": call_id, "executed": False,
             }
 
+    t0 = time.time()
     result = tools_svc.execute_tool(tool, **args)
     status = "allowed" if pol["allowed"] else "human_review"
+    try:
+        from app.services import otel as otel_svc
+        otel_svc.emit_span(
+            "tool.execute",
+            {"tool": tool, "status": status, "sessionId": session_id},
+            duration_ms=(time.time() - t0) * 1000,
+        )
+    except Exception:
+        pass
     return {
         "id": f"audit-{step}", "timestamp": ts,
         "action": f"{tool}({json.dumps(args)[:80]})",
         "tool": tool, "alignment": alignment, "status": status,
         "result": str(result)[:200], "executed": True,
+        "matchedPolicies": pol.get("matchedPolicies", []),
     }
