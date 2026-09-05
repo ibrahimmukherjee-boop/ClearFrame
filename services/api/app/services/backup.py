@@ -26,6 +26,11 @@ BACKUP_TABLES = [
     "workflows",
     "workflow_runs",
     "settings",
+    "tenants",
+    "fed_catalogs",
+    "fed_queries",
+    "lineage_events",
+    "schema_migrations",
 ]
 
 BACKUP_FORMAT_VERSION = 1

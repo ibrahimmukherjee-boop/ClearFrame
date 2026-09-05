@@ -28,6 +28,8 @@ PERMISSIONS: dict[str, set[str]] = {
 
 PUBLIC_PATHS = {
     "/api/health",
+    "/api/ready",
+    "/api/live",
     "/api/auth/login",
     "/api/auth/refresh",
     "/api/auth/oidc/login",

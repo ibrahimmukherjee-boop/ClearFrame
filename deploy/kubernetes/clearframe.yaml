@@ -1,0 +1,160 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: clearframe
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: clearframe-config
+  namespace: clearframe
+data:
+  CLEARFRAME_ENV: "production"
+  CLEARFRAME_AUTH: "true"
+  CLEARFRAME_HSTS: "true"
+  CLEARFRAME_API_HOST: "0.0.0.0"
+  CLEARFRAME_DATA_DIR: "/data"
+  CLEARFRAME_CORS: "https://ibrahimmukherjee-boop.github.io"
+  USE_OLLAMA: "false"
+  CLEARFRAME_HITL_BLOCKING: "false"
+  CLEARFRAME_HITL_AUTO_APPROVE: "false"
+---
+# Create the Secret out-of-band (never commit real values):
+# kubectl -n clearframe create secret generic clearframe-secrets \
+#   --from-literal=DATABASE_URL='postgresql://...' \
+#   --from-literal=CLEARFRAME_JWT_SECRET='...' \
+#   --from-literal=CLEARFRAME_VAULT_PASSPHRASE='...' \
+#   --from-literal=CLEARFRAME_AUDIT_SECRET='...' \
+#   --from-literal=CLEARFRAME_ADMIN_PASSWORD='...'
+apiVersion: v1
+kind: Secret
+metadata:
+  name: clearframe-secrets
+  namespace: clearframe
+type: Opaque
+stringData:
+  DATABASE_URL: "postgresql://clearframe:CHANGE_ME@clearframe-pg:5432/clearframe"
+  CLEARFRAME_JWT_SECRET: "CHANGE_ME_JWT_32_CHARS_MINIMUM!!!!"
+  CLEARFRAME_VAULT_PASSPHRASE: "CHANGE_ME_VAULT_32_CHARS_MINIMUM!"
+  CLEARFRAME_AUDIT_SECRET: "CHANGE_ME_AUDIT_32_CHARS_MINIMUM!"
+  CLEARFRAME_ADMIN_PASSWORD: "CHANGE_ME_ADMIN_PASSWORD"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clearframe-api
+  namespace: clearframe
+  labels:
+    app: clearframe-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: clearframe-api
+  template:
+    metadata:
+      labels:
+        app: clearframe-api
+    spec:
+      containers:
+        - name: api
+          image: ghcr.io/ibrahimmukherjee-boop/clearframe-api:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+          envFrom:
+            - configMapRef:
+                name: clearframe-config
+            - secretRef:
+                name: clearframe-secrets
+          readinessProbe:
+            httpGet:
+              path: /api/ready
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/live
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: clearframe-api
+  namespace: clearframe
+spec:
+  selector:
+    app: clearframe-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: clearframe-api
+  namespace: clearframe
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: clearframe-api
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: clearframe-api
+  namespace: clearframe
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: clearframe-api
+  minReplicas: 2
+  maxReplicas: 8
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: clearframe-api
+  namespace: clearframe
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: clearframe-api.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: clearframe-api
+                port:
+                  name: http

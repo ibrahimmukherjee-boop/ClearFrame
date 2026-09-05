@@ -1,0 +1,54 @@
+# Production-shaped local stack: API + Postgres.
+# Usage: docker compose up --build
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: clearframe
+      POSTGRES_USER: clearframe
+      POSTGRES_PASSWORD: clearframe
+    ports:
+      - "5432:5432"
+    volumes:
+      - cf-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U clearframe -d clearframe"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./services/api
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      CLEARFRAME_ENV: production
+      CLEARFRAME_AUTH: "true"
+      CLEARFRAME_HSTS: "false"
+      CLEARFRAME_API_HOST: 0.0.0.0
+      CLEARFRAME_DATA_DIR: /data
+      CLEARFRAME_CORS: http://localhost:4173,http://127.0.0.1:4173,https://ibrahimmukherjee-boop.github.io
+      DATABASE_URL: postgresql://clearframe:clearframe@db:5432/clearframe
+      CLEARFRAME_JWT_SECRET: local-dev-jwt-change-me-32chars!!
+      CLEARFRAME_VAULT_PASSPHRASE: local-dev-vault-change-me-32!!
+      CLEARFRAME_AUDIT_SECRET: local-dev-audit-change-me-32!!
+      CLEARFRAME_ADMIN_PASSWORD: ChangeMeAdmin2026!
+      USE_OLLAMA: "false"
+      CLEARFRAME_HITL_BLOCKING: "false"
+      CLEARFRAME_HITL_AUTO_APPROVE: "false"
+    volumes:
+      - cf-data:/data
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:8080/api/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  cf-pg:
+  cf-data:

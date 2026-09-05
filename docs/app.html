@@ -110,6 +110,7 @@ label{display:block;font-family:var(--mono);font-size:.58rem;letter-spacing:.12e
     <button class="tab" data-v="sonar" onclick="show('sonar')">Sonar</button>
     <button class="tab" data-v="policies" onclick="show('policies')">Policies</button>
     <button class="tab" data-v="governance" onclick="show('governance')">Governance</button>
+    <button class="tab" data-v="federation" onclick="show('federation')">Federation</button>
     <button class="tab" data-v="workflows" onclick="show('workflows')">Workflows</button>
   </nav>
 
@@ -262,6 +263,29 @@ label{display:block;font-family:var(--mono);font-size:.58rem;letter-spacing:.12e
     </div>
   </section>
 
+  <section class="view" id="v-federation">
+    <div class="split">
+      <div class="card">
+        <div class="k">Federated query gateway</div>
+        <p class="note">Starburst-style governed SELECT across registered catalogs. Column masking applied; mutations rejected; every result gets a lineage record.</p>
+        <label for="fed-sql">SQL</label>
+        <textarea id="fed-sql" rows="4" style="width:100%;font-family:var(--mono);font-size:.75rem;border-radius:12px;padding:.7rem;border:1px solid var(--line);background:var(--paper)">SELECT * FROM crm.customers LIMIT 10</textarea>
+        <div class="actions" style="margin-top:.7rem">
+          <button class="btn btn-ink" onclick="runFedQuery()">Run query</button>
+          <button class="btn" onclick="loadFedCatalogs()">Refresh catalogs</button>
+          <button class="btn" onclick="document.getElementById('fed-sql').value='SELECT * FROM crm.customers JOIN warehouse.orders LIMIT 20'">Join CRM × Warehouse</button>
+        </div>
+        <pre class="out" id="fed-out">—</pre>
+      </div>
+      <div class="card">
+        <div class="k">Catalogs</div>
+        <div id="fed-cats"><div class="empty">—</div></div>
+        <div class="k" style="margin-top:1rem">Lineage</div>
+        <div id="fed-lin"><div class="empty">—</div></div>
+      </div>
+    </div>
+  </section>
+
   <section class="view" id="v-workflows">
     <div class="split">
       <div class="card">
@@ -308,7 +332,23 @@ window.CF_DEMO = localStorage.getItem("clearframe_demo") === "1";
       { id: "pol-block-drop", name: "Block destructive SQL", rule: { tool: "db_query", pattern: "DROP|DELETE|TRUNCATE", action: "deny" }, priority: 100 },
       { id: "pol-trust-shell", name: "Shell requires elevated trust", rule: { tool: "shell_exec", min_trust_score: 80, action: "deny" }, priority: 95 }
     ],
-    workflows: [], evidence: [], pipelineLog: []
+    workflows: [], evidence: [], pipelineLog: [],
+    tenants: [{ tenantId: "ten-default", name: "Default Organisation", status: "active", quotas: { maxAgents: 100, maxQueriesPerHour: 1000 } }],
+    catalogs: [
+      { catalogId: "cat-crm", name: "crm", kind: "virtual", description: "Virtual CRM", maskColumns: ["email"],
+        config: { tables: { customers: [
+          { id: "c1", email: "alice@acme.com", plan: "enterprise", arr: 120000 },
+          { id: "c2", email: "bob@startup.io", plan: "startup", arr: 12000 },
+          { id: "c3", email: "cara@bank.example", plan: "regulated", arr: 450000 }
+        ] } } },
+      { catalogId: "cat-warehouse", name: "warehouse", kind: "virtual", description: "Virtual warehouse", maskColumns: [],
+        config: { tables: { orders: [
+          { order_id: "o1", customer_id: "c1", amount: 4200, region: "eu" },
+          { order_id: "o2", customer_id: "c2", amount: 180, region: "us" },
+          { order_id: "o3", customer_id: "c3", amount: 98000, region: "eu" }
+        ] } } }
+    ],
+    fedQueries: [], lineage: []
   });
   let S;
   try { S = JSON.parse(localStorage.getItem(KEY)) || DEFAULT_STATE(); } catch { S = DEFAULT_STATE(); }
@@ -463,6 +503,60 @@ window.CF_DEMO = localStorage.getItem("clearframe_demo") === "1";
       return { collected: items.length, evidence: items };
     }
     if (path === "/api/workflows" && method === "GET") return S.workflows;
+    if (path === "/api/tenants" && method === "GET") return S.tenants || [];
+    if (path === "/api/federation/catalogs" && method === "GET") return (S.catalogs || []).map(c => ({
+      catalogId: c.catalogId, name: c.name, kind: c.kind, description: c.description, maskColumns: c.maskColumns, enabled: true, config: { tables: Object.keys(c.config.tables || {}) }
+    }));
+    if (path === "/api/federation/query" && method === "POST") {
+      const sql = (body.sql || "").trim();
+      if (!/^select\b/i.test(sql) || /\b(insert|update|delete|drop|alter|create|truncate)\b/i.test(sql)) {
+        return { detail: "Only SELECT queries are permitted in the federation gateway" };
+      }
+      const refs = [...sql.matchAll(/\b(?:from|join)\s+([A-Za-z_]\w*)\.([A-Za-z_]\w*)/gi)].map(m => [m[1].toLowerCase(), m[2].toLowerCase()]);
+      if (!refs.length) return { detail: "Query must reference catalog.table (e.g. SELECT * FROM crm.customers)" };
+      const used = [];
+      let rows = [];
+      for (const [cn, tn] of refs) {
+        const cat = (S.catalogs || []).find(c => c.name.toLowerCase() === cn);
+        if (!cat) return { detail: "Unknown catalog '" + cn + "'" };
+        const key = Object.keys(cat.config.tables || {}).find(k => k.toLowerCase() === tn);
+        if (!key) return { detail: "Table " + tn + " not found in " + cn };
+        used.push(cn);
+        let part = JSON.parse(JSON.stringify(cat.config.tables[key]));
+        for (const col of (cat.maskColumns || [])) {
+          part = part.map(r => {
+            const c = { ...r };
+            if (c[col] != null) { const s = String(c[col]); c[col] = s.length > 4 ? s.slice(0, 2) + "***" + s.slice(-2) : "***"; }
+            return c;
+          });
+        }
+        if (!rows.length) rows = part;
+        else {
+          const joined = [];
+          for (const a of rows) for (const b of part) {
+            if (String(a.id || a.customer_id) === String(b.customer_id || b.id)) joined.push({ ...a, ...b });
+          }
+          rows = joined.length ? joined : rows;
+        }
+      }
+      const lim = (sql.match(/\blimit\s+(\d+)/i) || [])[1];
+      if (lim) rows = rows.slice(0, Math.min(+lim, 500));
+      const qid = uid("fq");
+      const entry = { queryId: qid, sql, status: "ok", rowCount: rows.length, catalogs: used, actor: "demo-operator", createdAt: ts() };
+      S.fedQueries = S.fedQueries || []; S.fedQueries.unshift(entry);
+      S.lineage = S.lineage || [];
+      S.lineage.unshift({ lineageId: qid, entityType: "federated_query", entityId: qid, inputs: used.map(c => ({ type: "catalog", id: c })), outputs: [{ type: "result_set", id: qid, rows: rows.length }], actor: "demo-operator", createdAt: ts() });
+      log("Federated query " + qid + " catalogs=" + used.join(",")); save();
+      return { queryId: qid, ok: true, blocked: false, rows, rowCount: rows.length, catalogs: used, durationMs: 12, lineageId: qid };
+    }
+    if (path === "/api/federation/queries") return S.fedQueries || [];
+    if (path === "/api/lineage") return S.lineage || [];
+    if ((m = path.match(/^\/api\/lineage\/([^/]+)$/))) {
+      const item = (S.lineage || []).find(l => l.lineageId === m[1]);
+      return item || { detail: "Lineage event not found" };
+    }
+    if (path === "/api/live") return { status: "alive" };
+    if (path === "/api/ready") return { status: "ready", database: "in-browser" };
     if (path === "/api/workflows" && method === "POST") { const w = { workflowId: uid("wf"), name: body.name || "workflow", description: body.description || "", steps: body.steps || [], status: "active" }; S.workflows.unshift(w); save(); return w; }
     if ((m = path.match(/^\/api\/workflows\/([^/]+)\/run$/))) {
       const w = S.workflows.find(x => x.workflowId === m[1]); if (!w) return { ok: false, message: "Workflow not found" };
@@ -603,8 +697,36 @@ window.CF_DEMO = localStorage.getItem("clearframe_demo") === "1";
     if (name === "trust") loadTrust();
     if (name === "policies") loadPolicies();
     if (name === "governance") loadGovernance();
+    if (name === "federation") { loadFedCatalogs(); loadLineage(); }
     if (name === "workflows") loadWorkflows();
     if (name === "sessions") loadAudit();
+  };
+
+  window.loadFedCatalogs = async function () {
+    try {
+      const cats = await req("/api/federation/catalogs");
+      $("fed-cats").innerHTML = cats.length ? cats.map(c => `<div class="chunk"><div class="n">◆</div><div>
+        <div class="what">${esc(c.name)} <span class="pill">${esc(c.kind)}</span></div>
+        <div class="how">${esc(c.description || "")} · mask: ${esc((c.maskColumns || []).join(", ") || "none")}</div>
+      </div></div>`).join("") : `<div class="empty">No catalogs.</div>`;
+    } catch (e) { $("fed-cats").innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+  };
+  window.runFedQuery = async function () {
+    try {
+      const d = await req("/api/federation/query", { method: "POST", body: JSON.stringify({ sql: $("fed-sql").value }) });
+      if (d.detail) throw new Error(d.detail);
+      $("fed-out").textContent = JSON.stringify(d, null, 2);
+      loadLineage();
+    } catch (e) { $("fed-out").textContent = e.message; }
+  };
+  window.loadLineage = async function () {
+    try {
+      const items = await req("/api/lineage");
+      $("fed-lin").innerHTML = items.length ? items.slice(0, 8).map(l => `<div class="chunk"><div class="n">◎</div><div>
+        <div class="what">${esc(l.entityType)} <span class="pill">${esc(l.lineageId)}</span></div>
+        <div class="how">in: ${(l.inputs || []).map(i => i.id).join(", ") || "—"} → out: ${(l.outputs || []).map(o => (o.rows != null ? o.rows + " rows" : o.id)).join(", ")}</div>
+      </div></div>`).join("") : `<div class="empty">No lineage yet — run a federated query.</div>`;
+    } catch (e) { $("fed-lin").innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   };
 
   window.createAgent = async function () {

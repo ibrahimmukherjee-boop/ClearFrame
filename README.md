@@ -17,6 +17,7 @@
 5. **Sonar / Audit** — watch threat events accumulate and inspect the per-action audit trail.
 6. **Agents → History / Revoke / Restore** — every change is versioned; roll back to any prior version. Soft-delete (revoke) and restore without losing the audit trail.
 7. **Governance → Backup & restore** — download a point-in-time JSON backup of governance state; restore is atomic and never includes credentials or vault secrets.
+8. **Federation** — run governed `SELECT` across CRM + warehouse catalogs; emails are column-masked; lineage is recorded for every result.
 
 The demo runs the whole platform in your browser (localStorage state, no servers, no account). **Sign out** resets it.
 
@@ -28,18 +29,25 @@ The demo runs the whole platform in your browser (localStorage state, no servers
 | **Full CRUD** | Create / Read / Update / soft-delete (revoke) / restore for agents; create / update / disable / rollback for policies |
 | **Versioned history** | Append-only snapshots of every mutation; roll back to any version (rollback is itself audited) |
 | **Atomic backup/restore** | Admin export of governance tables; restore is all-or-nothing and allowlisted (never touches users, tokens, or vault secrets) |
+| **Federated query gateway** | Starburst-inspired SELECT across catalogs with column masking, policy gates, and lineage |
+| **Multi-tenancy** | Organisation namespaces + `X-Tenant-Id` isolation |
+| **Data lineage** | Provenance graph for federated results and governed actions |
+| **Idempotency keys** | Safe retries via `Idempotency-Key` on federation mutations |
+| **Schema migrations** | Versioned migration registry applied at boot |
+| **K8s probes** | `/api/live` + `/api/ready` for cluster orchestration |
 | **Login lockout** | 5 failed attempts → 429 with Retry-After; Sonar records the brute-force event |
 | **Production gate** | API refuses to boot in production without JWT secret, vault passphrase, audit secret, and Postgres |
 | **Security headers** | `X-Content-Type-Options`, `X-Frame-Options`, HSTS in production |
 
 ## Run it for real
 
-Two paths, both documented step-by-step in [DEPLOYMENT.md](DEPLOYMENT.md):
-
-| Path | Time | What you get |
+| Path | Time | Manifest |
 |---|---|---|
-| [Render Blueprint](https://dashboard.render.com/blueprint/new?repo=https://github.com/ibrahimmukherjee-boop/ClearFrame) | ~5 min | Managed FastAPI + Postgres, HTTPS, health checks |
-| Docker (any host) | ~10 min | `services/api/Dockerfile` + Postgres; works on any cloud or on-prem |
+| [Render Blueprint](https://dashboard.render.com/blueprint/new?repo=https://github.com/ibrahimmukherjee-boop/ClearFrame) | ~5 min | `render.yaml` |
+| Docker Compose | ~10 min | `docker-compose.yml` (API + Postgres) |
+| Kubernetes | ~20 min | `deploy/kubernetes/clearframe.yaml` |
+
+Full instructions: [DEPLOYMENT.md](DEPLOYMENT.md) · [deploy/README.md](deploy/README.md).
 
 Then open the Pages console, expand **Live sign-in**, enter your backend URL, and sign in as `admin@erasys.local` with the password you set via `CLEARFRAME_ADMIN_PASSWORD`.
 
@@ -62,6 +70,8 @@ pytest                                   # unit + integration suites
 |---|---|
 | `clearframe/` | Open-source agent protocol package (unchanged) |
 | `docs/` | GitHub Pages operator console + instant demo runtime |
-| `services/api/` | FastAPI operator backend: auth, agents, pipeline, Aegis, SafePulse, TrustRegistry, Sonar, audit |
+| `services/api/` | FastAPI operator backend: auth, agents, pipeline, Aegis, SafePulse, TrustRegistry, Sonar, federation, audit |
+| `docker-compose.yml` | Local/VM production-shaped stack (API + Postgres) |
+| `deploy/kubernetes/` | Deployment, Service, Ingress, HPA, PDB, probes |
 | `render.yaml` | One-click Render Blueprint (web service + Postgres) |
-| `DEPLOYMENT.md` | Full deployment guide: instant demo, Render, Docker, local dev, security |
+| `DEPLOYMENT.md` | Full deployment guide: instant demo, Render, Docker, K8s, local dev, security |

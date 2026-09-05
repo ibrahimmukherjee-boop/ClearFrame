@@ -60,6 +60,24 @@ docker run -p 8080:8080 -v clearframe-data:/data \
 
 Production startup **refuses to boot** with missing/default secrets, wildcard CORS, or a non-Postgres `DATABASE_URL` (see `services/api/app/production.py`).
 
+### Docker Compose (recommended local/VM production shape)
+
+```bash
+docker compose up --build
+curl -sf http://127.0.0.1:8080/api/ready
+```
+
+### Kubernetes
+
+See [`deploy/README.md`](deploy/README.md) and [`deploy/kubernetes/clearframe.yaml`](deploy/kubernetes/clearframe.yaml).
+
+The API is a **stateless** container; Postgres holds state. Probes:
+
+- `GET /api/live` — process up (liveness)
+- `GET /api/ready` — database accepts connections (readiness)
+
+Also included: HPA, PodDisruptionBudget, Ingress skeleton, ConfigMap + Secret pattern.
+
 ### Environment variables
 
 | Variable | Purpose | Production requirement |

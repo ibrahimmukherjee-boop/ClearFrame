@@ -39,13 +39,22 @@ from app.services import compliance as compliance_svc
 from app.services import policy_hub as policy_hub_svc
 from app.services import action_audit as action_audit_svc
 from app.services import backup as backup_svc
+from app.services import federation as federation_svc
 from app.services import history as history_svc
+from app.services import idempotency as idem_svc
+from app.services import lineage as lineage_svc
+from app.services import migrations as migrations_svc
+from app.services import tenancy as tenancy_svc
 from app.production import enforce_or_exit, production_status
 
 
 def require_permission(user: dict | None, permission: str) -> None:
     if user and not auth_svc.has_permission(user["role"], permission):
         raise HTTPException(403, f"Requires {permission} permission")
+
+
+def tenant_from_request(request: Request) -> str:
+    return request.headers.get("X-Tenant-Id", tenancy_svc.DEFAULT_TENANT)
 
 
 @asynccontextmanager
@@ -223,7 +232,7 @@ async def health() -> dict[str, Any]:
     return {
         "status": "ok",
         "service": "erasys-clearframe-stack",
-        "version": "2.0.0-enterprise",
+        "version": "2.1.0-enterprise",
         "clearframeRuntime": cf_runtime.CLEARFRAME_AVAILABLE,
         "agentOps": ops_svc.ops_status(),
         "toolCount": len(tools_svc.list_catalog()),
@@ -232,7 +241,34 @@ async def health() -> dict[str, Any]:
         "database": backend_label(),
         "ssoEnabled": oidc_svc.sso_enabled(),
         "production": production_status(),
+        "migrations": migrations_svc.applied(),
+        "features": {
+            "federation": True,
+            "tenancy": True,
+            "lineage": True,
+            "idempotency": True,
+            "backup": True,
+            "history": True,
+        },
     }
+
+
+@app.get("/api/live")
+def liveness() -> dict[str, str]:
+    """Kubernetes liveness probe — process is up."""
+    return {"status": "alive"}
+
+
+@app.get("/api/ready")
+def readiness() -> dict[str, Any]:
+    """Kubernetes readiness probe — database accepts connections."""
+    try:
+        from app.database import get_conn
+        with get_conn() as conn:
+            conn.execute("SELECT 1")
+        return {"status": "ready", "database": backend_label()}
+    except Exception as exc:
+        raise HTTPException(503, f"not ready: {exc}")
 
 
 @app.post("/api/auth/login")
@@ -529,6 +565,104 @@ def restore_backup(body: BackupRestoreIn, user: dict = Depends(get_current_user)
         return backup_svc.restore_all(body.model_dump(), actor=(user or {}).get("email", "system"))
     except ValueError as exc:
         raise HTTPException(400, str(exc))
+
+
+class TenantIn(BaseModel):
+    name: str
+    quotas: dict[str, Any] = Field(default_factory=lambda: {"maxAgents": 50, "maxQueriesPerHour": 500})
+
+
+class CatalogIn(BaseModel):
+    name: str
+    kind: str = "virtual"
+    description: str = ""
+    config: dict[str, Any] = Field(default_factory=dict)
+    maskColumns: list[str] = Field(default_factory=list)
+
+
+class FederatedQueryIn(BaseModel):
+    sql: str
+    agentId: str = ""
+
+
+@app.get("/api/tenants")
+def list_tenants(user: dict = Depends(get_current_user)) -> list[dict[str, Any]]:
+    require_permission(user, "governance:read")
+    return tenancy_svc.list_tenants()
+
+
+@app.post("/api/tenants")
+def create_tenant(body: TenantIn, user: dict = Depends(get_current_user)) -> dict[str, Any]:
+    require_permission(user, "*")
+    return tenancy_svc.create_tenant(body.name, body.quotas)
+
+
+@app.get("/api/federation/catalogs")
+def fed_catalogs(request: Request, user: dict = Depends(get_current_user)) -> list[dict[str, Any]]:
+    require_permission(user, "agents:read")
+    return federation_svc.list_catalogs(tenant_from_request(request))
+
+
+@app.post("/api/federation/catalogs")
+def fed_register_catalog(body: CatalogIn, request: Request, user: dict = Depends(get_current_user)) -> dict[str, Any]:
+    require_permission(user, "*")
+    try:
+        return federation_svc.register_catalog(
+            body.name, body.kind, body.config, body.description, body.maskColumns,
+            tenant_id=tenant_from_request(request), actor=(user or {}).get("email", "system"),
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+
+
+@app.post("/api/federation/query")
+def fed_query(body: FederatedQueryIn, request: Request, user: dict = Depends(get_current_user)) -> dict[str, Any]:
+    require_permission(user, "agents:write")
+    idem = request.headers.get("Idempotency-Key", "").strip()
+    path = "/api/federation/query"
+    if idem:
+        cached = idem_svc.lookup(idem, "POST", path)
+        if cached:
+            return cached["body"]
+    try:
+        result = federation_svc.execute_query(
+            body.sql,
+            tenant_id=tenant_from_request(request),
+            actor=(user or {}).get("email", "system"),
+            agent_id=body.agentId,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    if idem:
+        idem_svc.store(idem, "POST", path, 200, result)
+    return result
+
+
+@app.get("/api/federation/queries")
+def fed_query_history(request: Request, user: dict = Depends(get_current_user)) -> list[dict[str, Any]]:
+    require_permission(user, "audit:read")
+    return federation_svc.list_queries(tenant_from_request(request))
+
+
+@app.get("/api/lineage")
+def lineage_recent(user: dict = Depends(get_current_user)) -> list[dict[str, Any]]:
+    require_permission(user, "audit:read")
+    return lineage_svc.recent()
+
+
+@app.get("/api/lineage/{lineage_id}")
+def lineage_get(lineage_id: str, user: dict = Depends(get_current_user)) -> dict[str, Any]:
+    require_permission(user, "audit:read")
+    item = lineage_svc.get(lineage_id)
+    if not item:
+        raise HTTPException(404, "Lineage event not found")
+    return item
+
+
+@app.get("/api/admin/migrations")
+def list_migrations(user: dict = Depends(get_current_user)) -> list[dict[str, Any]]:
+    require_permission(user, "*")
+    return migrations_svc.applied()
 
 
 @app.get("/api/governance/hub")
