@@ -2,34 +2,33 @@
 
 ## Product split
 
-| | **ClearFrame** (open source) | **Nexus Protocol** (Erasys commercial) |
+| | **ClearFrame** | **Nexus Protocol** |
 |---|---|---|
-| License | Apache 2.0 | Commercial |
-| Control plane | Agents, Aegis, TrustRegistry, Sonar AI SOC, policies, data gateway | Everything in ClearFrame |
-| SafePulse | Demo-only in console (labelled commercial) | Included |
-| Support | Community | Enterprise |
+| Source | **Open source** (Apache 2.0) | **Closed source** (Erasys commercial) |
+| Includes | Continuum, Lattice, Mandate Studio, Aegis, TrustRegistry, Sonar AI SOC, governed data, multi-provider LLMs | ClearFrame capabilities **+ SafePulse** + enterprise support |
+| SafePulse | Demo-labelled only (not OSS) | Included |
 
-## Instant demo (GitHub Pages)
+## Instant demo
 
-Open https://ibrahimmukherjee-boop.github.io/ClearFrame/ and choose **Try demo**.
-
-Every flow works in the browser: pipeline, agents (multi-provider), SafePulse (Nexus demo), TrustRegistry, sessions, Aegis, Sonar AI SOC, policies (NLP upload + Cedar), governed **Data** chat (no SQL), governance evidence, workflows.
+https://ibrahimmukherjee-boop.github.io/ClearFrame/ — **Try demo**.
 
 ## Backend
 
-`services/api/` — Dockerised FastAPI: agents, sessions, Aegis HITL, SafePulse, TrustRegistry, Sonar AI SOC, policies, governance/evidence, workflows, vault, JWT auth, managed memory, OTEL export, Cedar/OPA import, Ranger-style verify, multi-provider LLM gateways.
+`services/api/` — FastAPI control plane.
 
 ### Provider env vars
 
 ```
 OPENAI_API_KEY=
 ANTHROPIC_API_KEY=
-AWS_ACCESS_KEY_ID= / AWS_REGION= / AWS_BEDROCK_ENDPOINT=
+HOSTED_LLM_ENDPOINT= / HOSTED_LLM_API_KEY=
 AZURE_OPENAI_API_KEY= / AZURE_OPENAI_ENDPOINT=
 CUSTOM_LLM_BASE_URL= / CUSTOM_LLM_API_KEY=
 OLLAMA_HOST=http://127.0.0.1:11434
 CLEARFRAME_OTEL=true
 CLEARFRAME_OTEL_PATH=/data/otel.jsonl
+CLEARFRAME_LATTICE_WORKERS=4
+CLEARFRAME_LATTICE_MAX_WORKERS=32
 ```
 
 ## Smoke & stress
@@ -38,7 +37,6 @@ CLEARFRAME_OTEL_PATH=/data/otel.jsonl
 cd services/api
 python -m pytest -q --ignore=tests/test_stress.py
 python stress_test.py
-python smoke_test.py   # needs running API
 ```
 
-See also `docker-compose.yml`, `deploy/kubernetes/clearframe.yaml`, and `render.yaml`.
+See `docker-compose.yml`, `deploy/kubernetes/clearframe.yaml`, `render.yaml`.

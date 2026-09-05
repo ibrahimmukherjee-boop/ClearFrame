@@ -48,9 +48,10 @@ from app.services import tenancy as tenancy_svc
 from app.services import data_access as data_access_svc
 from app.services import memory as memory_svc
 from app.services import otel as otel_svc
-from app.services import cedar_opa as cedar_opa_svc
+from app.services import mandate as mandate_svc
 from app.services import ranger as ranger_svc
 from app.services import providers as providers_svc
+from app.services import lattice as lattice_svc
 from app.production import enforce_or_exit, production_status
 
 
@@ -251,9 +252,10 @@ async def health() -> dict[str, Any]:
         "features": {
             "federationEngine": True,
             "agentDataAccess": True,
-            "managedMemory": True,
+            "continuumMemory": True,
+            "latticeScale": True,
+            "mandateStudio": True,
             "otelExport": True,
-            "cedarOpaImport": True,
             "rangerVerify": True,
             "sonarAiSoc": True,
             "multiProviderLlm": True,
@@ -266,8 +268,10 @@ async def health() -> dict[str, Any]:
         "providers": providers_svc.list_providers(),
         "product": {
             "openSource": "ClearFrame",
-            "commercial": "Nexus Protocol (includes SafePulse)",
-            "license": "Apache-2.0 (ClearFrame protocol + control plane)",
+            "openSourceLicense": "Apache-2.0",
+            "closedSource": "Nexus Protocol",
+            "vendor": "Erasys",
+            "nexusIncludes": ["SafePulse", "commercial support", "enterprise extensions"],
         },
     }
 
@@ -980,13 +984,25 @@ def data_catalogs(request: Request) -> list[dict[str, Any]]:
     return federation_svc.list_catalogs(tenant_from_request(request))
 
 
-# ── Managed memory ──────────────────────────────────────────────────────────
+# ── Continuum (managed memory) ──────────────────────────────────────────────
 
 class MemoryLongIn(BaseModel):
     agentId: str
     key: str
     value: Any
     importance: float = 0.5
+
+
+class ContinuumPutIn(BaseModel):
+    agentId: str
+    content: str
+    strategy: str = "episodic"
+    namespace: str = "default"
+    key: str | None = None
+    sessionId: str = ""
+    importance: float = 0.5
+    tags: list[str] = Field(default_factory=list)
+    ttlSec: int | None = None
 
 
 @app.get("/api/memory/{session_id}")
@@ -1002,23 +1018,133 @@ def memory_long_write(body: MemoryLongIn, request: Request) -> dict[str, Any]:
     return {"ok": True, "memoryId": mid}
 
 
-# ── Cedar / OPA import ──────────────────────────────────────────────────────
+@app.get("/api/continuum")
+def continuum_dash(request: Request) -> dict[str, Any]:
+    return memory_svc.dashboard(tenant_from_request(request))
+
+
+@app.get("/api/continuum/browse")
+def continuum_browse(
+    request: Request,
+    agentId: str = "",
+    namespace: str | None = None,
+    strategy: str | None = None,
+) -> list[dict[str, Any]]:
+    return memory_svc.browse(tenant_from_request(request), agentId, namespace, strategy)
+
+
+@app.get("/api/continuum/search")
+def continuum_search(request: Request, q: str, agentId: str = "") -> list[dict[str, Any]]:
+    return memory_svc.search(tenant_from_request(request), q, agentId)
+
+
+@app.post("/api/continuum")
+def continuum_put(body: ContinuumPutIn, request: Request) -> dict[str, Any]:
+    try:
+        return memory_svc.put(
+            tenant_from_request(request),
+            body.agentId,
+            body.content,
+            strategy=body.strategy,
+            namespace=body.namespace,
+            key=body.key,
+            session_id=body.sessionId,
+            importance=body.importance,
+            tags=body.tags,
+            ttl_sec=body.ttlSec,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+
+
+# ── Mandate Studio ──────────────────────────────────────────────────────────
 
 class PolicyImportIn(BaseModel):
     text: str
     format: str = "auto"
 
 
+class MandateAuthorIn(BaseModel):
+    effect: str
+    tool: str
+    whenMinTrust: float | None = None
+    requireApproval: bool = False
+    name: str | None = None
+    priority: int | None = None
+
+
 @app.post("/api/policies/import")
 def policy_import(body: PolicyImportIn, user: dict = Depends(get_current_user)) -> dict[str, Any]:
     actor = (user or {}).get("email", "operator")
     try:
-        return cedar_opa_svc.import_policy(body.text, body.format, actor=actor)
+        return mandate_svc.import_policy(body.text, body.format, actor=actor)
     except ValueError as exc:
         raise HTTPException(400, str(exc))
 
 
-# ── Apache Ranger-style verification ────────────────────────────────────────
+@app.post("/api/mandate/author")
+def mandate_author(body: MandateAuthorIn, user: dict = Depends(get_current_user)) -> dict[str, Any]:
+    actor = (user or {}).get("email", "operator")
+    try:
+        return mandate_svc.author(
+            body.effect,
+            body.tool,
+            when_min_trust=body.whenMinTrust,
+            require_approval=body.requireApproval,
+            name=body.name,
+            priority=body.priority,
+            actor=actor,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+
+
+@app.post("/api/mandate/preview")
+def mandate_preview(body: MandateAuthorIn) -> dict[str, Any]:
+    return mandate_svc.preview(body.effect, body.tool, body.whenMinTrust)
+
+
+# ── Lattice (elastic scale-out) ─────────────────────────────────────────────
+
+class LatticeScaleIn(BaseModel):
+    workers: int = 4
+
+
+class LatticeJobIn(BaseModel):
+    agentId: str
+    goal: str
+
+
+@app.get("/api/lattice")
+def lattice_status() -> dict[str, Any]:
+    return lattice_svc.status()
+
+
+@app.post("/api/lattice/scale")
+def lattice_scale(body: LatticeScaleIn, user: dict = Depends(get_current_user)) -> dict[str, Any]:
+    require_permission(user, "agents:write")
+    return lattice_svc.scale(body.workers)
+
+
+@app.post("/api/lattice/jobs")
+def lattice_enqueue(body: LatticeJobIn, request: Request) -> dict[str, Any]:
+    return lattice_svc.enqueue(body.agentId, body.goal, tenant_from_request(request))
+
+
+@app.get("/api/lattice/jobs")
+def lattice_jobs() -> list[dict[str, Any]]:
+    return lattice_svc.list_jobs()
+
+
+@app.get("/api/lattice/jobs/{job_id}")
+def lattice_job(job_id: str) -> dict[str, Any]:
+    job = lattice_svc.get_job(job_id)
+    if not job:
+        raise HTTPException(404, "Job not found")
+    return job
+
+
+# ── Access verification ─────────────────────────────────────────────────────
 
 class RangerVerifyIn(BaseModel):
     principal: str

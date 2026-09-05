@@ -1,62 +1,52 @@
-"""ClearFrame — open-source AI agent governance control plane.
+"""ClearFrame — open-source AI agent governance control plane (Apache 2.0).
 
-**ClearFrame** (this repo) is the **open-source** protocol and control plane (Apache 2.0):
-agents, Aegis HITL, TrustRegistry, Sonar AI SOC, policy hub, governed data access,
-multi-provider LLM gateways, managed memory, and evidence export.
+**ClearFrame** is the **open-source** protocol and control plane from Erasys:
+agents, Aegis HITL, TrustRegistry, Sonar AI SOC, Continuum memory, Lattice
+scale-out, Mandate Studio, governed data access, multi-provider LLM gateways,
+and compliance evidence.
 
-**Nexus Protocol** is the Erasys **commercial** product. It includes everything in
-ClearFrame **plus SafePulse** (operator behavioural biometrics). SafePulse is
-demonstrated in the console for evaluation but is **not** part of the OSS ClearFrame
-distribution.
+**Nexus Protocol** is Erasys’s **closed-source** commercial product. It includes
+ClearFrame capabilities **plus SafePulse** (operator behavioural biometrics) and
+enterprise support. SafePulse is demonstrated in the console for evaluation but
+is **not** part of the ClearFrame OSS distribution.
 
-## Why ClearFrame vs AgentCore / Bedrock lock-in
+## ClearFrame capabilities
 
-| Capability | ClearFrame | Typical AgentCore |
+| Layer | Product name | Role |
 |---|---|---|
-| Self-hostable control plane | Yes | Managed AWS |
-| Stack-agnostic agents (Ollama, OpenAI, Anthropic, Bedrock, Azure, custom) | Yes | Bedrock-centric |
-| Human-in-command (Aegis) | Yes | Partial |
-| Compliance evidence (ISO 42001 / EU AI Act) | Yes | Limited |
-| Federated data under policy | Governance-first gateway (Trino-compatible) | Engine-dependent |
-| Managed memory | Short + long-term (self-hosted) | Deeper managed Memory |
-| Cedar / OPA import | Yes | Cedar-native UX |
-| OpenTelemetry export | JSONL / collector-ready | Native OTEL |
-| Apache Ranger-style verify | Yes | — |
+| Memory | **Continuum** | Working / episodic / semantic memory, namespaces, recall |
+| Scale-out | **Lattice** | Self-hosted elastic worker pool for agent jobs |
+| Policy authoring | **Mandate Studio** | Structured forbid/permit + DSL + OPA/Rego import |
+| HITL | **Aegis** | Human-in-command tool gating |
+| SOC | **Sonar** | AI security operations centre |
+| Trust | **TrustRegistry** | Agent certificates |
+| Data | Agent `data_fetch` / Data chat | Governed catalog access (no SQL console) |
 
-Honest gaps we still close over time: deeper Memory UX, serverless scale-out, and richer Cedar authoring. Next investments: real Postgres/REST connectors behind catalogs, Cedar/OPA UX polish, and collector-shipped OTEL.
+Hybrid / self-host story: open control plane, stack-agnostic agents (Ollama, OpenAI, Anthropic, Azure, hosted OpenAI-compatible gateways), human-in-command, compliance evidence, federated data under policy — without proprietary lock-in.
 
 ## Instant demo (no backend)
-
-Open the GitHub Pages console — **Try demo** runs the full pipeline in the browser:
 
 **https://ibrahimmukherjee-boop.github.io/ClearFrame/**
 
 1. **Pipeline** — builder → SafePulse (Nexus demo) → TrustRegistry → session → Aegis → Sonar  
-2. **Agents** — create agents across Ollama / OpenAI / Anthropic / Bedrock / Azure / custom  
-3. **Data** — chat questions to fetch & visualize governed catalog data (no SQL console)  
-4. **AI SOC** — Sonar playbooks, containment, threat dashboard  
-5. **Policies** — upload PDF/TXT/DOCX/MD → NLP hierarchy → hard enforcement + Cedar import + Ranger verify  
+2. **Agents** — Ollama / OpenAI / Anthropic / hosted / Azure / custom  
+3. **Data** — chat to fetch & visualize governed catalog data  
+4. **Continuum / Lattice** — memory browse + elastic job pool  
+5. **Policies** — NLP upload + Mandate Studio + Ranger-style verify  
+6. **AI SOC** — Sonar playbooks and containment  
 
-## Production stack
+## Production
 
-- `services/api/` — FastAPI + Postgres/SQLite  
-- `docs/` — GitHub Pages operator console  
-- `deploy/kubernetes/` — K8s manifests  
-- `docker-compose.yml` — local full stack  
-
-See [DEPLOYMENT.md](DEPLOYMENT.md).
+See [DEPLOYMENT.md](DEPLOYMENT.md). Backend: `services/api/`. Console: `docs/`.
 
 ## Key APIs
 
 | Area | Endpoints |
 |---|---|
-| Agent data (no SQL UI) | `POST /api/data/ask`, `GET /api/data/catalogs` |
-| Memory | `GET /api/memory/{session}`, `POST /api/memory/long` |
+| Continuum | `GET/POST /api/continuum`, `GET /api/continuum/browse`, `GET /api/continuum/search` |
+| Lattice | `GET /api/lattice`, `POST /api/lattice/scale`, `POST /api/lattice/jobs` |
+| Mandate Studio | `POST /api/mandate/author`, `POST /api/mandate/preview`, `POST /api/policies/import` |
+| Data | `POST /api/data/ask`, `GET /api/data/catalogs` |
 | Sonar AI SOC | `GET /api/sonar/soc`, `POST /api/sonar/scan`, `POST /api/sonar/contain` |
-| Providers | `GET /api/providers`, `GET /api/providers/{id}/validate` |
-| Cedar/OPA | `POST /api/policies/import` |
-| Ranger verify | `POST /api/verify/ranger`, `GET /api/verify/ranger/portfolio` |
-| Policy NLP | `POST /api/governance/documents/upload`, `GET /api/governance/hierarchy` |
-| OTEL | `GET /api/otel/status` (+ `CLEARFRAME_OTEL_PATH` JSONL) |
-
-Federation SQL endpoints remain for admin/engine integration; operators use **Data** chat and agent tools `data_fetch` / `data_visualize`.
+| Providers | `GET /api/providers` |
+| Verify | `POST /api/verify/ranger`, `GET /api/verify/audit-chain` |

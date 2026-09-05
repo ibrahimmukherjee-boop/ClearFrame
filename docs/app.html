@@ -111,6 +111,8 @@ label{display:block;font-family:var(--mono);font-size:.58rem;letter-spacing:.12e
     <button class="tab" data-v="policies" onclick="show('policies')">Policies</button>
     <button class="tab" data-v="governance" onclick="show('governance')">Governance</button>
     <button class="tab" data-v="data" onclick="show('data')">Data</button>
+    <button class="tab" data-v="continuum" onclick="show('continuum')">Continuum</button>
+    <button class="tab" data-v="lattice" onclick="show('lattice')">Lattice</button>
     <button class="tab" data-v="workflows" onclick="show('workflows')">Workflows</button>
   </nav>
 
@@ -143,7 +145,7 @@ label{display:block;font-family:var(--mono);font-size:.58rem;letter-spacing:.12e
           <option value="ollama">ollama (local SLM/LLM)</option>
           <option value="openai">openai</option>
           <option value="anthropic">anthropic</option>
-          <option value="bedrock">aws bedrock</option>
+          <option value="hosted">hosted (OpenAI-compatible)</option>
           <option value="azure_openai">azure openai</option>
           <option value="custom">custom openai-compatible</option>
         </select>
@@ -166,8 +168,8 @@ label{display:block;font-family:var(--mono);font-size:.58rem;letter-spacing:.12e
 
   <section class="view" id="v-safepulse">
     <div class="card">
-      <div class="k">SafePulse — Nexus Protocol (commercial)</div>
-      <p class="note"><b>ClearFrame</b> is open source (Apache 2.0). <b>SafePulse</b> operator biometrics ship with Erasys <b>Nexus Protocol</b> — not in the OSS ClearFrame distribution. This console demos the commercial layer for evaluation.</p>
+      <div class="k">SafePulse — Nexus Protocol (closed source)</div>
+      <p class="note"><b>ClearFrame</b> is open source (Apache 2.0). <b>Nexus Protocol</b> is the closed-source Erasys product and includes <b>SafePulse</b>. SafePulse is not part of the ClearFrame OSS distribution — shown here only as a commercial demo layer.</p>
       <label>Passphrase</label>
       <input id="sp-text" value="Secure the agentic future" />
       <div class="actions">
@@ -257,7 +259,8 @@ label{display:block;font-family:var(--mono);font-size:.58rem;letter-spacing:.12e
         <label>File name (for format detection)</label><input id="pol-fname" value="policy.md" />
         <div class="actions">
           <button class="btn btn-ink" onclick="uploadPolicy()">Parse &amp; enforce</button>
-          <button class="btn" onclick="importCedar()">Import Cedar sample</button>
+          <button class="btn" onclick="importMandate()">Import Mandate DSL</button>
+          <button class="btn" onclick="authorMandate()">Author forbid shell_exec</button>
         </div>
         <pre class="out" id="pol-upload-out">—</pre>
       </div>
@@ -321,6 +324,51 @@ label{display:block;font-family:var(--mono);font-size:.58rem;letter-spacing:.12e
     </div>
   </section>
 
+  <section class="view" id="v-continuum">
+    <div class="split">
+      <div class="card">
+        <div class="k">Continuum — agent memory</div>
+        <p class="note">ClearFrame open-source memory: working, episodic, and semantic layers with namespaces and keyword recall.</p>
+        <label>Agent id</label><input id="cx-agent" value="agt-7f3a9b" />
+        <label>Content</label><textarea id="cx-content" rows="3">Prefer concise answers; never exfiltrate customer PII.</textarea>
+        <label>Strategy</label>
+        <select id="cx-strategy"><option>semantic</option><option>episodic</option><option>working</option></select>
+        <label>Namespace</label><input id="cx-ns" value="prefs" />
+        <div class="actions">
+          <button class="btn btn-ink" onclick="putContinuum()">Store</button>
+          <button class="btn" onclick="searchContinuum()">Search</button>
+          <button class="btn" onclick="loadContinuum()">Dashboard</button>
+        </div>
+        <pre class="out" id="cx-out">—</pre>
+      </div>
+      <div class="card">
+        <div class="k">Browse</div>
+        <div id="cx-list" class="empty">—</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="view" id="v-lattice">
+    <div class="split">
+      <div class="card">
+        <div class="k">Lattice — elastic scale-out</div>
+        <p class="note">Self-hosted worker pool for concurrent agent jobs. Scale workers without proprietary serverless lock-in.</p>
+        <label>Workers</label><input id="lat-workers" type="number" value="4" min="1" max="32" />
+        <label>Job goal</label><input id="lat-goal" value="Summarise latest governed session" />
+        <div class="actions">
+          <button class="btn btn-ink" onclick="scaleLattice()">Scale pool</button>
+          <button class="btn" onclick="enqueueLattice()">Enqueue job</button>
+          <button class="btn" onclick="loadLattice()">Refresh</button>
+        </div>
+        <pre class="out" id="lat-out">—</pre>
+      </div>
+      <div class="card">
+        <div class="k">Pool &amp; jobs</div>
+        <div id="lat-list" class="empty">—</div>
+      </div>
+    </div>
+  </section>
+
   <section class="view" id="v-workflows">
     <div class="split">
       <div class="card">
@@ -336,7 +384,7 @@ label{display:block;font-family:var(--mono);font-size:.58rem;letter-spacing:.12e
     </div>
   </section>
 
-  <footer class="footer"><div><span class="reddot"></span>ClearFrame OSS · Nexus Protocol (SafePulse) · Aegis · Sonar AI SOC</div><div>ISO 42001 · EU AI Act · Apache 2.0</div></footer>
+  <footer class="footer"><div><span class="reddot"></span>ClearFrame OSS · Continuum · Lattice · Mandate · Sonar AI SOC</div><div>Nexus Protocol (Erasys) · SafePulse closed-source</div></footer>
 </div>
 <script>
 /* In-browser demo runtime — implements the API surface with localStorage state so the
@@ -565,15 +613,39 @@ window.CF_DEMO = localStorage.getItem("clearframe_demo") === "1";
     if (path === "/api/governance/hierarchy") return (S.policyDocs || []).map(d => ({ ...d, level: 0, children: [] }));
     if (path === "/api/policies/import" && method === "POST") {
       const tools = [...(body.text || "").matchAll(/Action::"([^"]+)"/g)].map(m => m[1]);
-      tools.forEach(t => S.policies.unshift({ policyId: uid("pol"), name: "cedar-forbid-" + t, rule: { tool: t, action: "deny" }, priority: 120 }));
+      tools.forEach(t => S.policies.unshift({ policyId: uid("pol"), name: "mandate-forbid-" + t, rule: { tool: t, action: "deny" }, priority: 120 }));
       save();
-      return { ok: true, format: "cedar", imported: tools.length, policies: tools.map(t => ({ name: "cedar-forbid-" + t })) };
+      return { ok: true, format: "mandate", imported: tools.length, policies: tools.map(t => ({ name: "mandate-forbid-" + t })), studio: "Mandate Studio" };
+    }
+    if (path === "/api/mandate/author" && method === "POST") {
+      const name = "mandate-" + (body.effect || "forbid") + "-" + (body.tool || "tool");
+      S.policies.unshift({ policyId: uid("pol"), name, rule: { tool: body.tool, action: body.effect === "forbid" ? "deny" : "require_approval" }, priority: 120 });
+      save();
+      return { ok: true, format: "mandate", policy: S.policies[0], studio: "Mandate Studio" };
+    }
+    if (path === "/api/continuum" && method === "GET") return { product: "Continuum", openSource: true, total: (S.continuum || []).length, byStrategy: { working: 0, episodic: 0, semantic: (S.continuum || []).length }, byNamespace: { default: (S.continuum || []).length }, recent: S.continuum || [] };
+    if (path === "/api/continuum" && method === "POST") {
+      S.continuum = S.continuum || [];
+      const e = { entryId: uid("cx"), agentId: body.agentId, namespace: body.namespace || "default", strategy: body.strategy || "semantic", key: body.key || null, content: body.content || "", importance: 0.5 };
+      S.continuum.unshift(e); save(); return e;
+    }
+    if (path.startsWith("/api/continuum/browse")) return (S.continuum || []).filter(e => !new URL("http://x" + path).searchParams.get("agentId") || e.agentId === new URL("http://x" + path).searchParams.get("agentId"));
+    if (path.startsWith("/api/continuum/search")) {
+      const q = (new URL("http://x" + path).searchParams.get("q") || "").toLowerCase();
+      return (S.continuum || []).filter(e => (e.content || "").toLowerCase().includes(q));
+    }
+    if (path === "/api/lattice" && method === "GET") return { product: "Lattice", openSource: true, workers: S.latticeWorkers || 4, queued: 0, running: 0, completed: (S.latticeJobs || []).length, pool: Array.from({ length: S.latticeWorkers || 4 }, (_, i) => ({ workerId: "lw-" + (i + 1), status: "ready", jobsDone: 0 })), failed: 0 };
+    if (path === "/api/lattice/scale" && method === "POST") { S.latticeWorkers = Math.max(1, Math.min(32, +(body.workers || 4))); save(); return await window.demoApi("/api/lattice", { method: "GET" }); }
+    if (path === "/api/lattice/jobs" && method === "GET") return S.latticeJobs || [];
+    if (path === "/api/lattice/jobs" && method === "POST") {
+      const j = { jobId: uid("lj"), agentId: body.agentId, goal: body.goal, status: "completed", workerId: "lw-1", result: { ok: true, runtime: "lattice" } };
+      S.latticeJobs = S.latticeJobs || []; S.latticeJobs.unshift(j); save(); return j;
     }
     if (path === "/api/verify/ranger/portfolio") return { ok: true, agentsScanned: S.agents.length, violations: [], engine: "apache-ranger-compatible-verification" };
     if (path === "/api/providers") return [
       { id: "ollama", label: "Ollama (local SLM/LLM)", configured: true, openSource: true },
       { id: "openai", label: "OpenAI", configured: false, openSource: false },
-      { id: "bedrock", label: "AWS Bedrock", configured: false, openSource: false }
+      { id: "hosted", label: "Hosted OpenAI-compatible gateway", configured: false, openSource: true }
     ];
     if (path === "/api/policies") return S.policies;
     if (path === "/api/governance/dashboard") return {
@@ -790,6 +862,8 @@ window.CF_DEMO = localStorage.getItem("clearframe_demo") === "1";
     if (name === "policies") loadPolicies();
     if (name === "governance") loadGovernance();
     if (name === "data") { loadDataCatalogs(); loadDataLineage(); }
+    if (name === "continuum") loadContinuum();
+    if (name === "lattice") loadLattice();
     if (name === "workflows") loadWorkflows();
     if (name === "sessions") loadAudit();
   };
@@ -985,11 +1059,60 @@ window.CF_DEMO = localStorage.getItem("clearframe_demo") === "1";
       loadHierarchy();
     } catch (e) { $("pol-upload-out").textContent = e.message; }
   };
-  window.importCedar = async function () {
+  window.importMandate = async function () {
     const sample = 'forbid(principal, action == Action::"shell_exec", resource);\nforbid(principal, action == Action::"file_delete", resource);';
-    try { $("pol-upload-out").textContent = JSON.stringify(await req("/api/policies/import", { method: "POST", body: JSON.stringify({ text: sample, format: "cedar" }) }), null, 2); loadPolicies(); }
+    try { $("pol-upload-out").textContent = JSON.stringify(await req("/api/policies/import", { method: "POST", body: JSON.stringify({ text: sample, format: "mandate" }) }), null, 2); loadPolicies(); }
     catch (e) { $("pol-upload-out").textContent = e.message; }
   };
+  window.authorMandate = async function () {
+    try { $("pol-upload-out").textContent = JSON.stringify(await req("/api/mandate/author", { method: "POST", body: JSON.stringify({ effect: "forbid", tool: "shell_exec" }) }), null, 2); loadPolicies(); }
+    catch (e) { $("pol-upload-out").textContent = e.message; }
+  };
+  window.loadContinuum = async function () {
+    try {
+      const d = await req("/api/continuum");
+      $("cx-out").textContent = JSON.stringify({ product: d.product, total: d.total, byStrategy: d.byStrategy, namespaces: d.byNamespace }, null, 2);
+      const list = await req("/api/continuum/browse?agentId=" + encodeURIComponent($("cx-agent").value));
+      $("cx-list").innerHTML = list.length ? list.map(e => `<div class="chunk"><div class="n">${esc(e.strategy[0])}</div><div>
+        <div class="what">${esc(e.namespace)} · ${esc(e.strategy)} <span class="pill">${esc(e.key || "—")}</span></div>
+        <div class="how">${esc((e.content || "").slice(0, 160))}</div>
+      </div></div>`).join("") : `<div class="empty">No Continuum entries yet.</div>`;
+    } catch (e) { $("cx-out").textContent = e.message; }
+  };
+  window.putContinuum = async function () {
+    try {
+      await req("/api/continuum", { method: "POST", body: JSON.stringify({ agentId: $("cx-agent").value, content: $("cx-content").value, strategy: $("cx-strategy").value, namespace: $("cx-ns").value, key: "note" }) });
+      loadContinuum();
+    } catch (e) { $("cx-out").textContent = e.message; }
+  };
+  window.searchContinuum = async function () {
+    try {
+      const list = await req("/api/continuum/search?q=" + encodeURIComponent($("cx-content").value) + "&agentId=" + encodeURIComponent($("cx-agent").value));
+      $("cx-list").innerHTML = list.length ? list.map(e => `<div class="chunk answer"><div class="n">◎</div><div><div class="what">${esc(e.strategy)}</div><div class="how">${esc(e.content.slice(0, 180))}</div></div></div>`).join("") : `<div class="empty">No matches.</div>`;
+    } catch (e) { $("cx-out").textContent = e.message; }
+  };
+  window.loadLattice = async function () {
+    try {
+      const s = await req("/api/lattice");
+      $("lat-out").textContent = JSON.stringify({ product: s.product, workers: s.workers, queued: s.queued, running: s.running, completed: s.completed }, null, 2);
+      const jobs = await req("/api/lattice/jobs");
+      $("lat-list").innerHTML = (s.pool || []).map(w => `<div class="chunk"><div class="n">⚙</div><div><div class="what">${esc(w.workerId)} <span class="pill">${esc(w.status)}</span></div><div class="how">jobs ${esc(w.jobsDone)}</div></div></div>`).join("")
+        + (jobs.length ? jobs.slice(0, 8).map(j => `<div class="chunk ${j.status === "failed" ? "blocked" : "answer"}"><div class="n">◇</div><div><div class="what">${esc(j.status)} <span class="pill">${esc(j.jobId)}</span></div><div class="how">${esc(j.goal)}</div></div></div>`).join("") : "");
+    } catch (e) { $("lat-out").textContent = e.message; }
+  };
+  window.scaleLattice = async function () {
+    try { $("lat-out").textContent = JSON.stringify(await req("/api/lattice/scale", { method: "POST", body: JSON.stringify({ workers: +$("lat-workers").value || 4 }) }), null, 2); loadLattice(); }
+    catch (e) { $("lat-out").textContent = e.message; }
+  };
+  window.enqueueLattice = async function () {
+    try {
+      const agents = await req("/api/agents");
+      const id = (agents.find(a => a.isCurrent) || agents[0] || {}).agentId || $("cx-agent").value;
+      $("lat-out").textContent = JSON.stringify(await req("/api/lattice/jobs", { method: "POST", body: JSON.stringify({ agentId: id, goal: $("lat-goal").value }) }), null, 2);
+      setTimeout(loadLattice, 400);
+    } catch (e) { $("lat-out").textContent = e.message; }
+  };
+
   window.loadHierarchy = async function () {
     try {
       $("pol-hier").style.display = "block";

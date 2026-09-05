@@ -60,7 +60,7 @@ def set_secret(key_name: str, value: str) -> None:
             (key_name, "stored", "stored", time.time()),
         )
     if not list_keys(True):
-        for default_key in ["OPENAI_API_KEY", "DATABASE_URL", "AWS_ACCESS_KEY"]:
+        for default_key in ["OPENAI_API_KEY", "DATABASE_URL", "HOSTED_LLM_API_KEY"]:
             if default_key not in store:
                 store[default_key] = f"placeholder-{default_key.lower()}"
         _save_store(store)
@@ -80,7 +80,7 @@ def get_secret(key_name: str) -> str | None:
 def ensure_defaults() -> None:
     store = _load_store()
     changed = False
-    for key in ["OPENAI_API_KEY", "DATABASE_URL", "AWS_ACCESS_KEY", "GITHUB_TOKEN", "SLACK_BOT_TOKEN"]:
+    for key in ["OPENAI_API_KEY", "DATABASE_URL", "HOSTED_LLM_API_KEY", "GITHUB_TOKEN", "SLACK_BOT_TOKEN"]:
         if key not in store:
             store[key] = f"local-{key.lower()}-dev"
             changed = True

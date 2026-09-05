@@ -15,7 +15,7 @@ from app.services import providers as providers_svc
 from app.services import ranger as ranger_svc
 from app.services import sonar as sonar_svc
 from app.services import policy_hub as hub_svc
-from app.services import cedar_opa as cedar_svc
+from app.services import mandate as mandate_svc
 from app.services import tools as tools_svc
 
 
@@ -39,7 +39,7 @@ def main() -> None:
     providers = [providers_svc.validate_provider_config(p["id"]) for p in providers_svc.list_providers()]
     portfolio = ranger_svc.verify_agent_portfolio()
     hub_svc.upload_document("Stress Policy", "internal", "Agents must not run shell_exec unauthorized.\n", "s.md")
-    cedar_svc.import_cedar('forbid(principal, action == Action::"file_delete", resource);')
+    mandate_svc.import_mandate_dsl('forbid(principal, action == Action::"file_delete", resource);')
     tools_ok = tools_svc.execute_tool("data_visualize", question="show customers")
     elapsed = time.time() - t0
     print(

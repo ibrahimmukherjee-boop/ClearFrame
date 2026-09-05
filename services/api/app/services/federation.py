@@ -1,14 +1,14 @@
-"""Federated query gateway — Starburst-inspired governed access across sources.
+"""Federated query gateway — ClearFrame governed access across source catalogs.
 
 Enterprise agents rarely live against a single database. This module registers
-*catalogs* (Postgres, REST APIs, S3/CSV, internal ClearFrame tables), runs
-federated SELECT-style queries across them under policy and tenant isolation,
+*catalogs* (Postgres, REST APIs, object-store/CSV, internal ClearFrame tables),
+runs federated SELECT-style queries across them under policy and tenant isolation,
 applies column masking, and records lineage for every result set.
 
-This is deliberately a governance-first federation layer (not a full Trino
-engine): it proves the enterprise control plane — catalog registration,
-policy evaluation before data leaves a source, column masking, quotas, and
-lineage — without requiring a separate query cluster.
+This is a governance-first federation layer (Trino-compatible SELECT path under
+the hood for agent tools): catalog registration, policy evaluation before data
+leaves a source, column masking, quotas, and lineage — without a separate
+vendor query cluster.
 """
 from __future__ import annotations
 

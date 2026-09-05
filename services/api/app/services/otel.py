@@ -1,7 +1,7 @@
 """OpenTelemetry-compatible export for traces, metrics, and audit spans.
 
-Emits OTEL-shaped JSON lines (compatible with collectors that accept JSON)
-so ClearFrame matches AgentCore-style observability without AWS lock-in.
+Emits OTEL-shaped JSON lines for any collector that accepts JSON —
+ClearFrame observability without proprietary lock-in.
 """
 from __future__ import annotations
 

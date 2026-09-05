@@ -30,7 +30,7 @@ _RULES: list[tuple[Any, str, str, str]] = [
      "data_exfiltration", "critical", "pb-block-exfil"),
     (re.compile(r"drop\s+table|rm\s+-rf|;\s*delete\s+from|truncate\s+", re.I),
      "destructive_command", "critical", "pb-block-destructive"),
-    (re.compile(r"api[_ ]?key|aws_secret|bearer\s+[a-z0-9._-]{20,}", re.I),
+    (re.compile(r"api[_ ]?key|secret_key|bearer\s+[a-z0-9._-]{20,}", re.I),
      "credential_exposure", "high", "pb-rotate-creds"),
     (["unusual", "off-hours", "anomaly"], "anomaly", "medium", "pb-investigate"),
 ]

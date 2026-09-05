@@ -1,7 +1,7 @@
 """Multi-provider agent reasoning loop with ClearFrame governance.
 
-Routes through OpenAI, Anthropic, Bedrock, Azure, custom OpenAI-compatible,
-or Ollama/SLMs via ``providers``. Injects managed memory and OTEL spans.
+Routes through OpenAI, Anthropic, Azure, hosted OpenAI-compatible gateways,
+or Ollama/SLMs via ``providers``. Injects Continuum memory and OTEL spans.
 """
 from __future__ import annotations
 
