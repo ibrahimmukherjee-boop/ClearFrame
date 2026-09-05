@@ -142,11 +142,80 @@ def _matches(rule: dict[str, Any], tool: str, args: dict[str, Any], context: dic
     return False
 
 
-def create_policy(name: str, rule: dict[str, Any], priority: int = 50) -> dict[str, Any]:
+def create_policy(name: str, rule: dict[str, Any], priority: int = 50, actor: str = "system") -> dict[str, Any]:
+    from app.services import history as history_svc
     pid = f"pol-{uuid.uuid4().hex[:8]}"
     with get_conn() as conn:
         conn.execute(
             "INSERT INTO runtime_policies (policy_id, name, rule_json, priority, created_at) VALUES (?, ?, ?, ?, ?)",
             (pid, name, json.dumps(rule), priority, time.time()),
         )
-    return {"policyId": pid, "name": name, "rule": rule, "priority": priority}
+    policy = {"policyId": pid, "name": name, "rule": rule, "priority": priority, "enabled": True}
+    history_svc.record("policy", pid, "created", policy, actor)
+    return policy
+
+
+def get_policy(policy_id: str) -> dict[str, Any] | None:
+    with get_conn() as conn:
+        r = conn.execute("SELECT * FROM runtime_policies WHERE policy_id = ?", (policy_id,)).fetchone()
+    if not r:
+        return None
+    return {
+        "policyId": r["policy_id"],
+        "name": r["name"],
+        "rule": json.loads(r["rule_json"]),
+        "priority": r["priority"],
+        "enabled": bool(r["enabled"]),
+    }
+
+
+def update_policy(policy_id: str, patch: dict[str, Any], actor: str = "system") -> dict[str, Any] | None:
+    from app.services import history as history_svc
+    existing = get_policy(policy_id)
+    if not existing:
+        return None
+    name = patch.get("name", existing["name"])
+    rule = patch.get("rule", existing["rule"])
+    priority = patch.get("priority", existing["priority"])
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE runtime_policies SET name = ?, rule_json = ?, priority = ? WHERE policy_id = ?",
+            (name, json.dumps(rule), priority, policy_id),
+        )
+    policy = get_policy(policy_id)
+    history_svc.record("policy", policy_id, "updated", policy, actor)
+    return policy
+
+
+def delete_policy(policy_id: str, actor: str = "system") -> bool:
+    """Soft delete: the policy is disabled, not removed, so its evaluation
+    history stays attributable and the delete is reversible via rollback."""
+    from app.services import history as history_svc
+    existing = get_policy(policy_id)
+    if not existing:
+        return False
+    with get_conn() as conn:
+        conn.execute("UPDATE runtime_policies SET enabled = 0 WHERE policy_id = ?", (policy_id,))
+    history_svc.record("policy", policy_id, "disabled", {**existing, "enabled": False}, actor)
+    return True
+
+
+def rollback_policy(policy_id: str, version: int, actor: str = "system") -> dict[str, Any] | None:
+    from app.services import history as history_svc
+    snapshot = history_svc.get_version("policy", policy_id, version)
+    if not snapshot or not get_policy(policy_id):
+        return None
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE runtime_policies SET name = ?, rule_json = ?, priority = ?, enabled = ? WHERE policy_id = ?",
+            (
+                snapshot["name"],
+                json.dumps(snapshot["rule"]),
+                snapshot["priority"],
+                int(snapshot.get("enabled", True)),
+                policy_id,
+            ),
+        )
+    policy = get_policy(policy_id)
+    history_svc.record("policy", policy_id, f"rollback_to_v{version}", policy, actor)
+    return policy

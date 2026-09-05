@@ -37,8 +37,15 @@ def test_pipeline_recovers_from_suspended_current_agent():
     assert suspended["status"] == "suspended"
 
 
+def _clear_login_attempts(email: str) -> None:
+    from app.database import get_conn
+    with get_conn() as conn:
+        conn.execute("DELETE FROM login_attempts WHERE email = ?", (email,))
+
+
 def test_login_lockout_after_repeated_failures():
     email = "admin@erasys.local"
+    _clear_login_attempts(email)
     for _ in range(auth_svc.LOGIN_MAX_ATTEMPTS):
         assert auth_svc.login(email, "wrong-password") is None
     with pytest.raises(auth_svc.LoginLocked) as exc:
@@ -48,6 +55,7 @@ def test_login_lockout_after_repeated_failures():
 
 def test_lockout_clears_on_successful_login():
     email = "operator@erasys.local"
+    _clear_login_attempts(email)
     for _ in range(auth_svc.LOGIN_MAX_ATTEMPTS - 1):
         assert auth_svc.login(email, "wrong-password") is None
     result = auth_svc.login(email, "operator")

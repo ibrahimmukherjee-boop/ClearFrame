@@ -38,7 +38,14 @@ from app.services import llm_agent as llm_svc
 from app.services import compliance as compliance_svc
 from app.services import policy_hub as policy_hub_svc
 from app.services import action_audit as action_audit_svc
+from app.services import backup as backup_svc
+from app.services import history as history_svc
 from app.production import enforce_or_exit, production_status
+
+
+def require_permission(user: dict | None, permission: str) -> None:
+    if user and not auth_svc.has_permission(user["role"], permission):
+        raise HTTPException(403, f"Requires {permission} permission")
 
 
 @asynccontextmanager
@@ -105,6 +112,25 @@ class AgentIn(BaseModel):
     allowWeb: bool = False
     allowFs: bool = False
     allowExec: bool = False
+
+
+class AgentUpdateIn(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    capabilities: list[str] | None = None
+    provider: str | None = None
+    model: str | None = None
+    maxSteps: int | None = None
+    allowWeb: bool | None = None
+    allowFs: bool | None = None
+    allowExec: bool | None = None
+    owner: str | None = None
+
+
+class BackupRestoreIn(BaseModel):
+    formatVersion: int
+    exportedAt: float | None = None
+    tables: dict[str, list[dict[str, Any]]]
 
 
 class ProfileIn(BaseModel):
@@ -369,6 +395,50 @@ def activate_agent(agent_id: str) -> dict[str, Any]:
     return agent
 
 
+@app.get("/api/agents/{agent_id}")
+def get_agent(agent_id: str) -> dict[str, Any]:
+    agent = agents_svc.get_agent(agent_id)
+    if not agent:
+        raise HTTPException(404, "Agent not found")
+    return agent
+
+
+@app.put("/api/agents/{agent_id}")
+def update_agent(agent_id: str, body: AgentUpdateIn, user: dict = Depends(get_current_user)) -> dict[str, Any]:
+    require_permission(user, "agents:write")
+    patch = body.model_dump(exclude_none=True)
+    agent = agents_svc.update_agent(agent_id, patch, actor=(user or {}).get("email", "system"))
+    if not agent:
+        raise HTTPException(404, "Agent not found")
+    return agent
+
+
+@app.get("/api/agents/{agent_id}/history")
+def agent_history(agent_id: str, user: dict = Depends(get_current_user)) -> list[dict[str, Any]]:
+    require_permission(user, "agents:read")
+    if not agents_svc.get_agent(agent_id):
+        raise HTTPException(404, "Agent not found")
+    return history_svc.list_history("agent", agent_id)
+
+
+@app.post("/api/agents/{agent_id}/rollback/{version}")
+def rollback_agent(agent_id: str, version: int, user: dict = Depends(get_current_user)) -> dict[str, Any]:
+    require_permission(user, "agents:write")
+    agent = agents_svc.rollback_agent(agent_id, version, actor=(user or {}).get("email", "system"))
+    if not agent:
+        raise HTTPException(404, "Agent or version not found")
+    return agent
+
+
+@app.post("/api/agents/{agent_id}/restore")
+def restore_agent(agent_id: str, user: dict = Depends(get_current_user)) -> dict[str, Any]:
+    require_permission(user, "agents:write")
+    agent = agents_svc.restore_agent(agent_id, actor=(user or {}).get("email", "system"))
+    if not agent:
+        raise HTTPException(404, "Agent is not revoked or has no restorable history")
+    return agent
+
+
 @app.get("/api/tools/catalog")
 def tool_catalog() -> list[dict[str, Any]]:
     return tools_svc.list_catalog()
@@ -402,9 +472,63 @@ def list_runtime_policies() -> list[dict[str, Any]]:
 
 @app.post("/api/policies")
 def create_policy(body: PolicyIn, user: dict = Depends(get_current_user)) -> dict[str, Any]:
-    if user and not auth_svc.has_permission(user["role"], "*"):
-        raise HTTPException(403, "Admin only")
-    return policy_svc.create_policy(body.name, body.rule, body.priority)
+    require_permission(user, "*")
+    return policy_svc.create_policy(
+        body.name, body.rule, body.priority, actor=(user or {}).get("email", "system")
+    )
+
+
+@app.put("/api/policies/{policy_id}")
+def update_policy(policy_id: str, body: PolicyIn, user: dict = Depends(get_current_user)) -> dict[str, Any]:
+    require_permission(user, "*")
+    policy = policy_svc.update_policy(
+        policy_id,
+        {"name": body.name, "rule": body.rule, "priority": body.priority},
+        actor=(user or {}).get("email", "system"),
+    )
+    if not policy:
+        raise HTTPException(404, "Policy not found")
+    return policy
+
+
+@app.delete("/api/policies/{policy_id}")
+def delete_policy(policy_id: str, user: dict = Depends(get_current_user)) -> dict[str, str]:
+    require_permission(user, "*")
+    if not policy_svc.delete_policy(policy_id, actor=(user or {}).get("email", "system")):
+        raise HTTPException(404, "Policy not found")
+    return {"status": "disabled"}
+
+
+@app.get("/api/policies/{policy_id}/history")
+def policy_history(policy_id: str, user: dict = Depends(get_current_user)) -> list[dict[str, Any]]:
+    require_permission(user, "governance:read")
+    if not policy_svc.get_policy(policy_id):
+        raise HTTPException(404, "Policy not found")
+    return history_svc.list_history("policy", policy_id)
+
+
+@app.post("/api/policies/{policy_id}/rollback/{version}")
+def rollback_policy(policy_id: str, version: int, user: dict = Depends(get_current_user)) -> dict[str, Any]:
+    require_permission(user, "*")
+    policy = policy_svc.rollback_policy(policy_id, version, actor=(user or {}).get("email", "system"))
+    if not policy:
+        raise HTTPException(404, "Policy or version not found")
+    return policy
+
+
+@app.get("/api/admin/backup")
+def export_backup(user: dict = Depends(get_current_user)) -> dict[str, Any]:
+    require_permission(user, "*")
+    return backup_svc.export_all(actor=(user or {}).get("email", "system"))
+
+
+@app.post("/api/admin/restore")
+def restore_backup(body: BackupRestoreIn, user: dict = Depends(get_current_user)) -> dict[str, Any]:
+    require_permission(user, "*")
+    try:
+        return backup_svc.restore_all(body.model_dump(), actor=(user or {}).get("email", "system"))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
 
 
 @app.get("/api/governance/hub")

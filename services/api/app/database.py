@@ -233,11 +233,19 @@ def init_db() -> None:
 
 @contextmanager
 def get_conn() -> Iterator[CompatConnection]:
+    """Transactional connection: commits on success, rolls back on any error.
+
+    Every ``with get_conn()`` block is one atomic transaction — if an exception
+    escapes the block, none of its writes are persisted.
+    """
     if USE_POSTGRES:
         conn = psycopg.connect(DATABASE_URL)
         try:
             yield CompatConnection(conn)
             conn.commit()
+        except BaseException:
+            conn.rollback()
+            raise
         finally:
             conn.close()
     else:
@@ -248,6 +256,9 @@ def get_conn() -> Iterator[CompatConnection]:
         try:
             yield CompatConnection(raw)
             raw.commit()
+        except BaseException:
+            raw.rollback()
+            raise
         finally:
             raw.close()
 

@@ -10,6 +10,7 @@ from app.services import action_audit as action_audit_svc
 from app.services import agents as agents_svc
 from app.services import auth as auth_svc
 from app.services import governance as governance_svc
+from app.services import history as history_svc
 from app.services import policy as policy_svc
 from app.services import policy_hub as policy_hub_svc
 from app.services import sonar as sonar_svc
@@ -26,6 +27,7 @@ def init_all(seed: bool = True) -> None:
     workflows_svc.init_workflows_db()
     policy_hub_svc.init_policy_hub_db()
     action_audit_svc.init_action_audit_db()
+    history_svc.init_history_db()
     if seed:
         agents_svc.seed_defaults()
         sonar_svc.seed_defaults()

@@ -8,6 +8,7 @@ from typing import Any
 
 from app.database import get_conn, row_to_dict
 from app.services import audit as audit_svc
+from app.services import history as history_svc
 
 PRESETS: dict[str, dict[str, Any]] = {
     "Customer Support Bot": {
@@ -139,7 +140,93 @@ def save_agent(data: dict[str, Any], set_current: bool = True) -> dict[str, Any]
     audit_svc.write_event("agent_saved", agent_id, {"name": data["name"]})
     _log_pipeline("Agent defined", f"{data['name']} ({agent_id})")
     agent = get_current_agent() if set_current else next((a for a in list_agents() if a["agentId"] == agent_id), None)
+    if agent:
+        history_svc.record("agent", agent_id, "created", agent, data.get("actor", "system"))
     return agent or {}
+
+
+def get_agent(agent_id: str) -> dict[str, Any] | None:
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM agents WHERE agent_id = ?", (agent_id,)).fetchone()
+    return _serialize_agent(dict(row)) if row else None
+
+
+MUTABLE_FIELDS = {
+    "name": "name", "description": "description", "provider": "provider",
+    "model": "model", "maxSteps": "max_steps", "allowWeb": "allow_web",
+    "allowFs": "allow_fs", "allowExec": "allow_exec", "owner": "owner",
+}
+
+
+def update_agent(agent_id: str, patch: dict[str, Any], actor: str = "system") -> dict[str, Any] | None:
+    """Partial update of mutable fields. Status changes go through
+    suspend/activate/revoke so their governance side effects always apply."""
+    if not get_agent(agent_id):
+        return None
+    sets, params = [], []
+    for api_field, column in MUTABLE_FIELDS.items():
+        if api_field in patch:
+            value = patch[api_field]
+            if column in {"allow_web", "allow_fs", "allow_exec"}:
+                value = int(bool(value))
+            sets.append(f"{column} = ?")
+            params.append(value)
+    if "capabilities" in patch:
+        sets.append("capabilities = ?")
+        params.append(json.dumps(patch["capabilities"]))
+    if not sets:
+        return get_agent(agent_id)
+    with get_conn() as conn:
+        conn.execute(f"UPDATE agents SET {', '.join(sets)} WHERE agent_id = ?", (*params, agent_id))
+    agent = get_agent(agent_id)
+    history_svc.record("agent", agent_id, "updated", agent, actor)
+    audit_svc.write_event(
+        "agent_updated",
+        agent_id,
+        {"fields": sorted(set(patch) & (set(MUTABLE_FIELDS) | {"capabilities"}))},
+    )
+    _log_pipeline("Agent updated", agent_id)
+    return agent
+
+
+def rollback_agent(agent_id: str, version: int, actor: str = "system") -> dict[str, Any] | None:
+    """Restore an agent to a recorded version. The rollback is itself recorded
+    as a new version — history is append-only."""
+    snapshot = history_svc.get_version("agent", agent_id, version)
+    if not snapshot or not get_agent(agent_id):
+        return None
+    with get_conn() as conn:
+        conn.execute(
+            """UPDATE agents SET name = ?, description = ?, capabilities = ?, provider = ?, model = ?,
+               max_steps = ?, allow_web = ?, allow_fs = ?, allow_exec = ?, trust_score = ?, status = ?, owner = ?
+               WHERE agent_id = ?""",
+            (
+                snapshot["name"], snapshot.get("description", ""), json.dumps(snapshot.get("capabilities", [])),
+                snapshot.get("provider", "ollama"), snapshot.get("model", "llama3"), snapshot.get("maxSteps", 10),
+                int(snapshot.get("allowWeb", False)), int(snapshot.get("allowFs", False)),
+                int(snapshot.get("allowExec", False)),
+                snapshot.get("trustScore", 100), snapshot.get("status", "active"),
+                snapshot.get("owner", "Current User"),
+                agent_id,
+            ),
+        )
+    agent = get_agent(agent_id)
+    history_svc.record("agent", agent_id, f"rollback_to_v{version}", agent, actor)
+    audit_svc.write_event("agent_rollback", agent_id, {"restoredVersion": version, "actor": actor})
+    _log_pipeline("Agent rolled back", f"{agent_id} → v{version}")
+    return agent
+
+
+def restore_agent(agent_id: str, actor: str = "system") -> dict[str, Any] | None:
+    """Un-delete a revoked agent: restores the latest pre-revocation snapshot."""
+    agent = get_agent(agent_id)
+    if not agent or agent["status"] != "revoked":
+        return None
+    entries = history_svc.list_history("agent", agent_id)
+    prior = next((e for e in entries if e["snapshot"].get("status") != "revoked"), None)
+    if not prior:
+        return None
+    return rollback_agent(agent_id, prior["version"], actor)
 
 
 def set_current_agent(agent_id: str) -> dict[str, Any] | None:
@@ -156,7 +243,10 @@ def suspend_agent(agent_id: str) -> dict[str, Any] | None:
         row = conn.execute("SELECT * FROM agents WHERE agent_id = ?", (agent_id,)).fetchone()
     audit_svc.write_event("agent_suspended", agent_id, {})
     _log_pipeline("Agent suspended", agent_id)
-    return _serialize_agent(dict(row)) if row else None
+    agent = _serialize_agent(dict(row)) if row else None
+    if agent:
+        history_svc.record("agent", agent_id, "suspended", agent)
+    return agent
 
 
 def activate_agent(agent_id: str) -> dict[str, Any] | None:
@@ -164,14 +254,25 @@ def activate_agent(agent_id: str) -> dict[str, Any] | None:
         conn.execute("UPDATE agents SET status = 'active' WHERE agent_id = ?", (agent_id,))
         row = conn.execute("SELECT * FROM agents WHERE agent_id = ?", (agent_id,)).fetchone()
     audit_svc.write_event("agent_activated", agent_id, {})
-    return _serialize_agent(dict(row)) if row else None
+    agent = _serialize_agent(dict(row)) if row else None
+    if agent:
+        history_svc.record("agent", agent_id, "activated", agent)
+    return agent
 
 
 def revoke_agent(agent_id: str) -> None:
+    """Soft delete: the agent row and its history are preserved so revocation
+    is auditable and reversible via restore_agent."""
     with get_conn() as conn:
-        conn.execute("UPDATE agents SET status = 'revoked', trust_score = 0 WHERE agent_id = ?", (agent_id,))
+        conn.execute(
+            "UPDATE agents SET status = 'revoked', trust_score = 0, is_current = 0 WHERE agent_id = ?",
+            (agent_id,),
+        )
     audit_svc.write_event("agent_revoked", agent_id, {})
     _log_pipeline("Agent revoked", agent_id)
+    agent = get_agent(agent_id)
+    if agent:
+        history_svc.record("agent", agent_id, "revoked", agent)
 
 
 def _log_pipeline(step: str, detail: str = "") -> None:

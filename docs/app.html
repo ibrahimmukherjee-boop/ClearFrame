@@ -153,6 +153,9 @@ label{display:block;font-family:var(--mono);font-size:.58rem;letter-spacing:.12e
       <div class="card">
         <div class="k">Registry (live)</div>
         <div id="agent-list"><div class="empty">—</div></div>
+        <div class="k" style="margin-top:1rem">Change history</div>
+        <p class="note">Every create, update, suspend, and revoke is versioned. Roll back to any version — the rollback itself is audited.</p>
+        <div id="agent-hist"><div class="empty">Pick an agent's History to inspect versions.</div></div>
       </div>
     </div>
   </section>
@@ -247,6 +250,16 @@ label{display:block;font-family:var(--mono);font-size:.58rem;letter-spacing:.12e
       </div>
       <pre class="out" id="gov-out">—</pre>
     </div>
+    <div class="card" style="margin-top:1rem">
+      <div class="k">Backup &amp; restore</div>
+      <p class="note">Point-in-time backup of all governance state (agents, policies, sessions, audit, history — never credentials or secrets). Restore is atomic: all or nothing.</p>
+      <div class="actions">
+        <button class="btn btn-ink" onclick="downloadBackup()">Download backup</button>
+        <button class="btn" onclick="document.getElementById('restore-file').click()">Restore from file</button>
+        <input type="file" id="restore-file" accept="application/json" style="display:none" />
+      </div>
+      <pre class="out" id="backup-out">—</pre>
+    </div>
   </section>
 
   <section class="view" id="v-workflows">
@@ -303,6 +316,12 @@ window.CF_DEMO = localStorage.getItem("clearframe_demo") === "1";
   save();
   const current = () => S.agents.find(a => a.isCurrent) || null;
   const log = m => S.pipelineLog.push("[" + ts() + "] " + m);
+  S.history = S.history || [];
+  const hist = (type, id, action, obj) => {
+    const version = S.history.filter(h => h.type === type && h.id === id).length + 1;
+    S.history.push({ type, id, version, action, snapshot: JSON.parse(JSON.stringify(obj)), actor: "demo-operator", createdAt: ts() });
+    return version;
+  };
   const threat = (agent, type, severity, description) => S.threats.unshift({ id: uid("evt"), timestamp: ts(), agent, type, severity, description });
   const threatScore = () => Math.min(95, S.threats.reduce((s, t) => s + ({ low: 3, medium: 8, high: 15, critical: 25 }[t.severity] || 5), 30));
   const compare = (a, b) => { const n = Math.min(a.length, b.length); if (!n) return 0; let d = 0; for (let i = 0; i < n; i++) { const m = Math.max(a[i], b[i]) || 1; d += Math.abs(a[i] - b[i]) / m; } return Math.max(0, Math.min(1, 1 - d / n)); };
@@ -341,14 +360,52 @@ window.CF_DEMO = localStorage.getItem("clearframe_demo") === "1";
     if (path === "/api/agents" && method === "GET") return S.agents;
     if (path === "/api/agents" && method === "POST") {
       const a = { agentId: uid("agt"), name: body.name || "agent", description: body.description || "", capabilities: body.capabilities || [], provider: body.provider || "ollama", model: body.model || "llama3", trustScore: 100, status: "active", allowWeb: !!body.allowWeb, allowFs: !!body.allowFs, allowExec: !!body.allowExec, isCurrent: false };
-      S.agents.unshift(a); log("Agent defined " + a.name + " (" + a.agentId + ")"); save(); return a;
+      S.agents.unshift(a); log("Agent defined " + a.name + " (" + a.agentId + ")"); hist("agent", a.agentId, "created", a); save(); return a;
     }
     if ((m = path.match(/^\/api\/agents\/([^/]+)\/(select|suspend|activate)$/))) {
       const a = S.agents.find(x => x.agentId === m[1]); if (!a) return { detail: "Agent not found" };
       if (m[2] === "select") { S.agents.forEach(x => x.isCurrent = false); a.isCurrent = true; }
-      if (m[2] === "suspend") { a.status = "suspended"; a.trustScore = Math.max(0, a.trustScore - 20); log("Agent suspended " + a.agentId); }
-      if (m[2] === "activate") a.status = "active";
+      if (m[2] === "suspend") { a.status = "suspended"; a.trustScore = Math.max(0, a.trustScore - 20); log("Agent suspended " + a.agentId); hist("agent", a.agentId, "suspended", a); }
+      if (m[2] === "activate") { a.status = "active"; hist("agent", a.agentId, "activated", a); }
       save(); return a;
+    }
+    if ((m = path.match(/^\/api\/agents\/([^/]+)$/)) && method === "PUT") {
+      const a = S.agents.find(x => x.agentId === m[1]); if (!a) return { detail: "Agent not found" };
+      ["name", "description", "capabilities", "provider", "model", "allowWeb", "allowFs", "allowExec", "owner"].forEach(f => { if (body[f] !== undefined) a[f] = body[f]; });
+      hist("agent", a.agentId, "updated", a); log("Agent updated " + a.agentId); save(); return a;
+    }
+    if ((m = path.match(/^\/api\/agents\/([^/]+)$/)) && method === "DELETE") {
+      const a = S.agents.find(x => x.agentId === m[1]); if (!a) return { detail: "Agent not found" };
+      a.status = "revoked"; a.trustScore = 0; a.isCurrent = false;
+      hist("agent", a.agentId, "revoked", a); log("Agent revoked " + a.agentId); save(); return { status: "revoked" };
+    }
+    if ((m = path.match(/^\/api\/agents\/([^/]+)\/history$/))) {
+      return S.history.filter(h => h.type === "agent" && h.id === m[1]).slice().reverse();
+    }
+    if ((m = path.match(/^\/api\/agents\/([^/]+)\/rollback\/(\d+)$/))) {
+      const a = S.agents.find(x => x.agentId === m[1]); if (!a) return { detail: "Agent not found" };
+      const entry = S.history.find(h => h.type === "agent" && h.id === m[1] && h.version === +m[2]);
+      if (!entry) return { detail: "Version not found" };
+      const s = entry.snapshot;
+      ["name", "description", "capabilities", "provider", "model", "trustScore", "status", "allowWeb", "allowFs", "allowExec", "owner"].forEach(f => { if (s[f] !== undefined) a[f] = s[f]; });
+      hist("agent", a.agentId, "rollback_to_v" + m[2], a); log("Agent rolled back " + a.agentId + " → v" + m[2]); save(); return a;
+    }
+    if ((m = path.match(/^\/api\/agents\/([^/]+)\/restore$/))) {
+      const a = S.agents.find(x => x.agentId === m[1]); if (!a) return { detail: "Agent not found" };
+      if (a.status !== "revoked") return { detail: "Agent is not revoked" };
+      const prior = S.history.slice().reverse().find(h => h.type === "agent" && h.id === m[1] && h.snapshot.status !== "revoked");
+      if (!prior) return { detail: "No restorable history" };
+      return window.demoApi("/api/agents/" + m[1] + "/rollback/" + prior.version, { method: "POST" });
+    }
+    if (path === "/api/admin/backup") {
+      log("Backup exported");
+      return { formatVersion: 1, exportedAt: Date.now() / 1000, demo: true, state: JSON.parse(JSON.stringify(S)) };
+    }
+    if (path === "/api/admin/restore") {
+      if (body.formatVersion !== 1 || !body.state) return { detail: "Unsupported backup format" };
+      S = body.state; S.history = S.history || [];
+      log("Backup restored"); save();
+      return { ok: true, restored: { agents: S.agents.length, policies: S.policies.length, workflows: S.workflows.length } };
     }
     if (path === "/api/safepulse/enroll") { S.operator = { operatorId: uid("op"), profile: body.profile || [], verified: false, trustScore: 0 }; log("SafePulse profile enrolled"); save(); return { enrolled: true, operatorId: S.operator.operatorId }; }
     if (path === "/api/safepulse/verify") {
@@ -420,6 +477,7 @@ window.CF_DEMO = localStorage.getItem("clearframe_demo") === "1";
       if (!cur || cur.status !== "active") {
         const a = { agentId: uid("agt"), name: "Customer Support Bot", description: "Answer customer tickets accurately and politely", capabilities: ["web_search", "email_send"], provider: "ollama", model: "llama3", trustScore: 100, status: "active", isCurrent: true };
         S.agents.forEach(x => x.isCurrent = false); S.agents.unshift(a);
+        hist("agent", a.agentId, "created", a);
       }
       steps.push({ id: "builder", status: "complete" });
       S.operator = { operatorId: uid("op"), profile: [120, 95, 110, 88, 102], verified: true, trustScore: 0.98 };
@@ -574,8 +632,12 @@ window.CF_DEMO = localStorage.getItem("clearframe_demo") === "1";
         <div class="how">${esc(x.description)} · ${esc((x.capabilities || []).join(", "))}</div>
         <div class="actions">
           <button class="btn btn-sm btn-ink" onclick="selectAgent('${x.agentId}')">Select</button>
-          <button class="btn btn-sm" onclick="suspendAgent('${x.agentId}')">Suspend</button>
+          ${x.status === "revoked"
+            ? `<button class="btn btn-sm" onclick="restoreAgent('${x.agentId}')">Restore</button>`
+            : `<button class="btn btn-sm" onclick="suspendAgent('${x.agentId}')">Suspend</button>
           <button class="btn btn-sm" onclick="activateAgent('${x.agentId}')">Activate</button>
+          <button class="btn btn-sm" onclick="deleteAgent('${x.agentId}')">Revoke</button>`}
+          <button class="btn btn-sm" onclick="agentHistory('${x.agentId}')">History</button>
         </div>
       </div></div>`).join("") : `<div class="empty">No agents yet.</div>`;
     } catch (e) { $("agent-list").innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
@@ -583,6 +645,23 @@ window.CF_DEMO = localStorage.getItem("clearframe_demo") === "1";
   window.selectAgent = async function (id) { await req("/api/agents/" + id + "/select", { method: "POST" }); loadAgents(); };
   window.suspendAgent = async function (id) { await req("/api/agents/" + id + "/suspend", { method: "POST" }); loadAgents(); };
   window.activateAgent = async function (id) { await req("/api/agents/" + id + "/activate", { method: "POST" }); loadAgents(); };
+  window.deleteAgent = async function (id) { await req("/api/agents/" + id, { method: "DELETE" }); loadAgents(); };
+  window.restoreAgent = async function (id) { await req("/api/agents/" + id + "/restore", { method: "POST" }); loadAgents(); };
+  window.agentHistory = async function (id) {
+    try {
+      const h = await req("/api/agents/" + id + "/history");
+      if (h.detail) throw new Error(h.detail);
+      $("agent-hist").innerHTML = h.length ? h.map(e => `<div class="chunk"><div class="n">v${e.version}</div><div>
+        <div class="what">${esc(e.action)} <span class="pill">${esc(e.actor || "system")}</span></div>
+        <div class="how">${esc(e.snapshot.name)} · ${esc(e.snapshot.status)} · trust ${e.snapshot.trustScore}</div>
+        <div class="actions"><button class="btn btn-sm" onclick="rollbackAgent('${id}', ${e.version})">Roll back to v${e.version}</button></div>
+      </div></div>`).join("") : `<div class="empty">No history for this agent yet.</div>`;
+    } catch (e) { $("agent-hist").innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+  };
+  window.rollbackAgent = async function (id, version) {
+    await req("/api/agents/" + id + "/rollback/" + version, { method: "POST" });
+    loadAgents(); agentHistory(id);
+  };
 
   const pulse = [];
   $("sp-text").addEventListener("keydown", () => pulse.push(performance.now()));
@@ -674,6 +753,30 @@ window.CF_DEMO = localStorage.getItem("clearframe_demo") === "1";
     try { $("gov-out").textContent = JSON.stringify(await req("/api/governance/dashboard"), null, 2); }
     catch (e) { $("gov-out").textContent = e.message; }
   };
+  window.downloadBackup = async function () {
+    try {
+      const data = await req("/api/admin/backup");
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "clearframe-backup-" + new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-") + ".json";
+      a.click();
+      URL.revokeObjectURL(a.href);
+      $("backup-out").textContent = "Backup downloaded (" + Object.keys(data.tables || { state: 1 }).length + " tables, audited).";
+    } catch (e) { $("backup-out").textContent = e.message; }
+  };
+  $("restore-file").addEventListener("change", async function () {
+    const file = this.files[0];
+    this.value = "";
+    if (!file) return;
+    try {
+      const payload = JSON.parse(await file.text());
+      const result = await req("/api/admin/restore", { method: "POST", body: JSON.stringify(payload) });
+      if (result.detail) throw new Error(result.detail);
+      $("backup-out").textContent = JSON.stringify(result, null, 2);
+      loadAgents();
+    } catch (e) { $("backup-out").textContent = "Restore failed: " + e.message; }
+  });
   window.collectEvidence = async function () {
     try { await req("/api/governance/evidence", { method: "POST" }); loadGovernance(); }
     catch (e) { $("gov-out").textContent = e.message; }

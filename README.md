@@ -15,8 +15,22 @@
 3. **Pipeline** — run the full governed pipeline: goal check → SafePulse operator verification → TrustRegistry certificate → policed execution → audit.
 4. **Aegis** — approve or block the tool calls the policy engine escalated for human review.
 5. **Sonar / Audit** — watch threat events accumulate and inspect the per-action audit trail.
+6. **Agents → History / Revoke / Restore** — every change is versioned; roll back to any prior version. Soft-delete (revoke) and restore without losing the audit trail.
+7. **Governance → Backup & restore** — download a point-in-time JSON backup of governance state; restore is atomic and never includes credentials or vault secrets.
 
 The demo runs the whole platform in your browser (localStorage state, no servers, no account). **Sign out** resets it.
+
+## Enterprise data & security controls
+
+| Control | What it does |
+|---|---|
+| **Transactional rollback** | Every DB write runs in a transaction; exceptions roll back automatically (SQLite + Postgres) |
+| **Full CRUD** | Create / Read / Update / soft-delete (revoke) / restore for agents; create / update / disable / rollback for policies |
+| **Versioned history** | Append-only snapshots of every mutation; roll back to any version (rollback is itself audited) |
+| **Atomic backup/restore** | Admin export of governance tables; restore is all-or-nothing and allowlisted (never touches users, tokens, or vault secrets) |
+| **Login lockout** | 5 failed attempts → 429 with Retry-After; Sonar records the brute-force event |
+| **Production gate** | API refuses to boot in production without JWT secret, vault passphrase, audit secret, and Postgres |
+| **Security headers** | `X-Content-Type-Options`, `X-Frame-Options`, HSTS in production |
 
 ## Run it for real
 
