@@ -416,6 +416,28 @@ def scan_prompt(prompt: str, agent_name: str = "operator") -> dict[str, Any]:
         )
         actions.append({"step": "notify_operator", "status": "done", "detail": "pipeline log + threat feed"})
 
+    # Bridge critical/high Sonar hits onto the enterprise SOC bus for correlation
+    soc_bridge = None
+    if matched_type != "ok" and severity in {"high", "critical"}:
+        try:
+            from app.services import soc_bus as soc_bus_svc
+
+            soc_bridge = soc_bus_svc.emit_from_sonar(
+                threat_type=matched_type,
+                severity=severity,
+                message=text[:240],
+                agent_name=agent_name,
+                actor_user="j.smith",
+            )
+            if soc_bridge.get("case"):
+                actions.append({
+                    "step": "soc_case",
+                    "status": "done",
+                    "detail": soc_bridge["case"].get("caseId"),
+                })
+        except Exception as exc:
+            actions.append({"step": "soc_case", "status": "failed", "detail": str(exc)[:120]})
+
     return {
         "type": matched_type,
         "severity": severity,
@@ -426,6 +448,7 @@ def scan_prompt(prompt: str, agent_name: str = "operator") -> dict[str, Any]:
         "event": event,
         "containment": containment,
         "actions": actions,
+        "socCase": (soc_bridge or {}).get("case") if soc_bridge else None,
         "soc": True,
     }
 

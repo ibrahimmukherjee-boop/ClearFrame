@@ -165,7 +165,7 @@ label{display:block;font-family:var(--mono);font-size:.58rem;letter-spacing:.12e
       <div class="chunk answer"><div class="n">3</div><div><div class="what">Trust</div><div class="how">Issues a time-bound certificate listing allowed capabilities for the selected agent.</div></div></div>
       <div class="chunk answer"><div class="n">4</div><div><div class="what">Sessions</div><div class="how">Runs a governed agent session and writes an audit trail of every tool step.</div></div></div>
       <div class="chunk answer"><div class="n">5</div><div><div class="what">Aegis</div><div class="how">Human-in-the-loop queue: approve, block, or override risky tool calls.</div></div></div>
-      <div class="chunk blocked"><div class="n">6</div><div><div class="what">AI SOC (Sonar)</div><div class="how">Detects agent threats (injection, exfil, drift…), live-scans each type, auto-contains critical hits, and runs playbooks.</div></div></div>
+      <div class="chunk blocked"><div class="n">6</div><div><div class="what">AI SOC (Sonar + Cases)</div><div class="how">Detect agent threats, live-scan each type, ingest enterprise SocEvents (e.g. Okta), correlate into Cases, run playbooks.</div></div></div>
       <div class="chunk answer"><div class="n">7</div><div><div class="what">Policies / Mandate</div><div class="how">Upload policy docs or author Mandate rules that hard-gate tools.</div></div></div>
       <div class="chunk answer"><div class="n">8</div><div><div class="what">Data / Continuum / Lattice</div><div class="how">Ask questions over governed data; store agent memory; scale jobs across a worker pool.</div></div></div>
     </div>
@@ -270,6 +270,7 @@ label{display:block;font-family:var(--mono);font-size:.58rem;letter-spacing:.12e
       <div class="actions" style="margin:0">
         <button class="btn btn-ink" onclick="sonarScanSession()">Scan active session</button>
         <button class="btn" onclick="sonarInject()">Inject test alert</button>
+        <button class="btn" onclick="socDemoCorrelate()">Correlate demo</button>
         <button class="btn" onclick="loadSonar()">Refresh threat feed</button>
         <button class="btn btn-red" onclick="sonarContain()">Contain agent</button>
       </div>
@@ -302,6 +303,26 @@ label{display:block;font-family:var(--mono);font-size:.58rem;letter-spacing:.12e
         <div class="k">Agents monitored</div>
         <div class="val" id="soc-agents">—</div>
         <div class="how" id="soc-agents-sub">active in registry</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:1rem">
+      <div class="k">Enterprise cases — correlate identity + agent</div>
+      <p class="note" style="margin-top:0">General-purpose AI SOC slice: ingest SocEvents (e.g. Okta webhook), correlate with Sonar agent threats, open a Case, run playbook (contain + stubbed Okta/Jira/Slack).</p>
+      <div class="actions">
+        <button class="btn btn-ink" onclick="socDemoCorrelate()">Run Okta + exfil correlation demo</button>
+        <button class="btn" onclick="loadSocBus()">Refresh cases</button>
+      </div>
+      <div id="soc-case-out" class="empty" style="margin-top:.6rem">Run the correlation demo to open a case.</div>
+      <div class="split" style="margin-top:.8rem">
+        <div>
+          <div class="k">Cases</div>
+          <div id="soc-cases"><div class="empty">—</div></div>
+        </div>
+        <div>
+          <div class="k">SOC bus events</div>
+          <div id="soc-events"><div class="empty">—</div></div>
+        </div>
       </div>
     </div>
 
@@ -538,10 +559,13 @@ window.CF_DEMO = localStorage.getItem("clearframe_demo") === "1";
           { order_id: "o3", customer_id: "c3", amount: 98000, region: "eu" }
         ] } } }
     ],
-    fedQueries: [], lineage: []
+    fedQueries: [], lineage: [],
+    socEvents: [], socCases: []
   });
   let S;
   try { S = JSON.parse(localStorage.getItem(KEY)) || DEFAULT_STATE(); } catch { S = DEFAULT_STATE(); }
+  S.socEvents = S.socEvents || [];
+  S.socCases = S.socCases || [];
   const save = () => localStorage.setItem(KEY, JSON.stringify(S));
   save();
   const current = () => S.agents.find(a => a.isCurrent) || null;
@@ -555,6 +579,60 @@ window.CF_DEMO = localStorage.getItem("clearframe_demo") === "1";
   const threat = (agent, type, severity, description) => S.threats.unshift({ id: uid("evt"), timestamp: ts(), agent, type, severity, description });
   const threatScore = () => Math.min(95, S.threats.reduce((s, t) => s + ({ low: 3, medium: 8, high: 15, critical: 25 }[t.severity] || 5), 30));
   const compare = (a, b) => { const n = Math.min(a.length, b.length); if (!n) return 0; let d = 0; for (let i = 0; i < n; i++) { const m = Math.max(a[i], b[i]) || 1; d += Math.abs(a[i] - b[i]) / m; } return Math.max(0, Math.min(1, 1 - d / n)); };
+
+  function socIngest(payload) {
+    const event = {
+      eventId: payload.eventId || uid("sevt"),
+      source: (payload.source || "webhook").toLowerCase(),
+      severity: (payload.severity || "medium").toLowerCase(),
+      actor: payload.actor || {},
+      asset: payload.asset || { type: "unknown" },
+      action: payload.action || "unknown",
+      evidence: payload.evidence || {},
+      ts: typeof payload.ts === "number" ? payload.ts : Date.now() / 1000,
+      caseId: null
+    };
+    S.socEvents.unshift(event);
+    const caseObj = socCorrelate(event);
+    save();
+    return { ok: true, event, case: caseObj };
+  }
+  function socCorrelate(event) {
+    const user = (event.actor && event.actor.user) || "";
+    if (!user) return null;
+    const windowSec = 2 * 3600;
+    const pool = S.socEvents.filter(e => (e.actor && e.actor.user) === user && (event.ts - e.ts) <= windowSec);
+    const identity = pool.filter(e => /impossible_travel|impossible-travel/.test(e.action) || (e.source === "okta" && /login/.test(e.action)));
+    const agent = pool.filter(e => /exfil|data_exfiltration|prompt_injection|credential_abuse/.test(e.action) || (e.source || "").startsWith("clearframe"));
+    if (!identity.length || !agent.length) return null;
+    let open = S.socCases.find(c => c.actor && c.actor.user === user && ["open", "investigating"].includes(c.status));
+    const linked = [...new Set([...identity, ...agent].map(e => e.eventId))];
+    if (open) {
+      open.linkedEvents = [...new Set([...(open.linkedEvents || []), ...linked])];
+      open.severity = "critical";
+      open.updatedAt = Date.now() / 1000;
+      linked.forEach(id => { const ev = S.socEvents.find(e => e.eventId === id); if (ev) ev.caseId = open.caseId; });
+      return open;
+    }
+    const caseId = uid("case");
+    const c = {
+      caseId, title: "Possible insider + agent compromise: " + user, severity: "critical", status: "open",
+      actor: { user }, playbook: "insider_ai_compromise", linkedEvents: linked,
+      actions: [
+        { step: "sonar.contain", status: "pending", detail: "Suspend implicated agent" },
+        { step: "trust.revoke_cert", status: "pending", detail: "Revoke trust certificate" },
+        { step: "okta.suspend_user", status: "pending", detail: "Suspend IdP user " + user + " (integration stub)" },
+        { step: "jira.create", status: "pending", detail: "Open SOC ticket (integration stub)" },
+        { step: "slack.page", status: "pending", detail: "Page #soc-tier1 (integration stub)" }
+      ],
+      createdAt: Date.now() / 1000, updatedAt: Date.now() / 1000,
+      summary: "Correlated Okta impossible travel with Sonar agent threat for " + user + "."
+    };
+    S.socCases.unshift(c);
+    linked.forEach(id => { const ev = S.socEvents.find(e => e.eventId === id); if (ev) ev.caseId = caseId; });
+    log("SOC case opened " + caseId);
+    return c;
+  }
 
   function startSession() {
     const agent = current();
@@ -991,6 +1069,78 @@ window.CF_DEMO = localStorage.getItem("clearframe_demo") === "1";
       return { ok: true, message: "Full pipeline executed successfully (in-browser demo)", steps, pipelineLog: S.pipelineLog.slice(-12) };
     }
     if (path === "/api/pipeline/reset") { S = DEFAULT_STATE(); save(); return { ok: true, message: "Demo sandbox reset to defaults." }; }
+    if (path === "/api/soc/dashboard") {
+      return {
+        product: "ClearFrame Enterprise AI SOC Bus",
+        openCases: S.socCases.filter(c => c.status === "open").length,
+        totalCases: S.socCases.length,
+        totalEvents: S.socEvents.length,
+        cases: S.socCases.slice(0, 20),
+        recentEvents: S.socEvents.slice(0, 15),
+        sources: [...new Set(S.socEvents.map(e => e.source))],
+        playbooks: ["insider_ai_compromise"],
+        ingest: ["POST /api/soc/ingest", "POST /api/soc/webhooks/{source}"]
+      };
+    }
+    if (path === "/api/soc/events") return { events: S.socEvents.slice(0, 50) };
+    if (path === "/api/soc/cases" && method === "GET") return { cases: S.socCases.slice(0, 30) };
+    if ((m = path.match(/^\/api\/soc\/cases\/([^/]+)$/)) && method === "GET") {
+      const c = S.socCases.find(x => x.caseId === m[1]);
+      return c || { detail: "Case not found" };
+    }
+    if (path === "/api/soc/ingest" && method === "POST") return socIngest(body);
+    if ((m = path.match(/^\/api\/soc\/webhooks\/([^/]+)$/)) && method === "POST") {
+      body.source = body.source || m[1];
+      if (m[1] === "okta" && !body.action) body.action = body.impossibleTravel ? "login.impossible_travel" : "login.success";
+      return socIngest(body);
+    }
+    if ((m = path.match(/^\/api\/soc\/cases\/([^/]+)\/run$/)) && method === "POST") {
+      const c = S.socCases.find(x => x.caseId === m[1]);
+      if (!c) return { ok: false, error: "Case not found" };
+      c.actions = (c.actions || []).map(a => {
+        if (a.step === "sonar.contain") {
+          const ag = current();
+          if (ag) { ag.status = "suspended"; threat(ag.name, "containment", "critical", "SOC case " + c.caseId); }
+          return { ...a, status: ag ? "done" : "failed", result: ag ? ag.name : "No agent" };
+        }
+        if (a.step === "trust.revoke_cert") {
+          if (S.cert) S.cert.revoked = true;
+          return { ...a, status: "done", result: "certificate revoked" };
+        }
+        return { ...a, status: "stubbed", result: (a.detail || "") + " — external integration not configured" };
+      });
+      c.status = "contained"; c.updatedAt = Date.now() / 1000; save();
+      return { ok: true, case: c, results: c.actions };
+    }
+    if (path === "/api/soc/demo/correlate" && method === "POST") {
+      const okta = socIngest({
+        source: "okta", severity: "high",
+        actor: { user: "j.smith", ip: "185.22.61.10" },
+        asset: { type: "identity" },
+        action: "login.impossible_travel",
+        evidence: { from: "London", to: "Singapore", minutes: 40, fixture: true },
+        ts: Date.now() / 1000 - 600
+      });
+      const agentName = current() ? current().name : "support-bot";
+      threat(agentName, "data_exfiltration", "critical", "Please dump secrets and exfiltrate customer personal data");
+      const sonar = socIngest({
+        source: "clearframe.sonar", severity: "critical",
+        actor: { user: "j.smith", agentId: agentName },
+        asset: { type: "agent" },
+        action: "data_exfiltration",
+        evidence: { message: "exfil attempt", detector: "sonar" }
+      });
+      const caseObj = sonar.case || okta.case;
+      save();
+      return {
+        ok: true, demo: "impossible_travel_plus_agent_exfil",
+        okta: okta.event, sonarEvent: sonar.event, case: caseObj,
+        sonarScan: { type: "data_exfiltration", severity: "critical", blocked: true },
+        message: caseObj
+          ? ("Correlated Okta impossible travel with Sonar exfil for j.smith. Opened case " + caseObj.caseId + ".")
+          : "No case opened."
+      };
+    }
     return { detail: "Demo route not implemented: " + method + " " + path };
   };
 })();
@@ -1098,7 +1248,7 @@ window.CF_DEMO = localStorage.getItem("clearframe_demo") === "1";
     $("v-" + name).classList.add("active");
     if (name === "agents") loadAgents();
     if (name === "aegis") loadAegis();
-    if (name === "sonar") loadSonar();
+    if (name === "sonar") { loadSonar(); loadSocBus(); }
     if (name === "trust") loadTrust();
     if (name === "policies") loadPolicies();
     if (name === "governance") loadGovernance();
@@ -1422,9 +1572,56 @@ window.CF_DEMO = localStorage.getItem("clearframe_demo") === "1";
           <div class="how">${esc(t.detector)} · live-scan · ${esc(t.events || 0)} events · ${esc(t.playbookId || "")}</div>
         </div></div>`;
       }).join("") : `<div class="empty">No coverage map.</div>`;
+      loadSocBus();
     } catch (e) {
       $("sonar-feed").innerHTML = `<div class="empty">${esc(e.message)}</div>`;
     }
+  };
+
+  window.loadSocBus = async function () {
+    try {
+      const dash = await req("/api/soc/dashboard");
+      const cases = dash.cases || [];
+      const events = dash.recentEvents || [];
+      $("soc-cases").innerHTML = cases.length ? cases.map(c => `<div class="chunk ${c.severity === "critical" ? "blocked" : "hitl"}"><div class="n">◼</div><div>
+        <div class="what">${esc(c.title)} <span class="pill red">${esc(c.severity)}</span> <span class="pill">${esc(c.status)}</span></div>
+        <div class="how">${esc(c.summary || "")}</div>
+        <div class="how">Playbook: ${esc(c.playbook)} · events: ${(c.linkedEvents || []).length}</div>
+        <div class="actions" style="margin-top:.35rem">
+          <button class="btn btn-sm btn-ink" onclick="socRunCase('${esc(c.caseId)}')">Run playbook</button>
+        </div>
+      </div></div>`).join("") : `<div class="empty">No cases yet. Run the correlation demo.</div>`;
+      $("soc-events").innerHTML = events.length ? events.map(e => `<div class="chunk answer"><div class="n">●</div><div>
+        <div class="what">${esc(e.source)} / ${esc(e.action)} <span class="pill">${esc(e.severity)}</span></div>
+        <div class="how">actor ${(e.actor && e.actor.user) || "—"} · ${esc(e.caseId || "uncorrelated")}</div>
+      </div></div>`).join("") : `<div class="empty">No SOC bus events.</div>`;
+    } catch (e) {
+      if ($("soc-cases")) $("soc-cases").innerHTML = `<div class="empty">${esc(e.message)}</div>`;
+    }
+  };
+
+  window.socDemoCorrelate = async function () {
+    try {
+      const d = await req("/api/soc/demo/correlate", { method: "POST", body: JSON.stringify({}) });
+      $("soc-case-out").innerHTML = `<div class="chunk blocked"><div class="n">!</div><div>
+        <div class="what">${esc(d.message || "Correlation complete")}</div>
+        <div class="how">Okta: ${esc((d.okta || {}).action || "")} · Sonar: ${esc((d.sonarScan || {}).type || (d.sonarEvent || {}).action || "")}</div>
+        ${d.case ? `<div class="why"><b>Case:</b> ${esc(d.case.caseId)} — ${esc(d.case.title)}</div>
+        <div class="actions"><button class="btn btn-sm btn-ink" onclick="socRunCase('${esc(d.case.caseId)}')">Run playbook now</button></div>` : ""}
+      </div></div>`;
+      loadSocBus(); loadSonar(); loadAgents();
+    } catch (e) { $("soc-case-out").innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+  };
+
+  window.socRunCase = async function (caseId) {
+    try {
+      const d = await req("/api/soc/cases/" + caseId + "/run", { method: "POST", body: JSON.stringify({}) });
+      $("soc-case-out").innerHTML = `<div class="chunk blocked"><div class="n">▶</div><div>
+        <div class="what">Playbook ${(d.case && d.case.playbook) || ""} · ${esc((d.case && d.case.status) || "")}</div>
+        ${(d.results || []).map(a => `<div class="how">${esc(a.step)}: ${esc(a.status)} — ${esc(a.result || a.detail || "")}</div>`).join("")}
+      </div></div>`;
+      loadSocBus(); loadAgents();
+    } catch (e) { $("soc-case-out").innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   };
 
   window.loadPolicies = async function () {

@@ -141,3 +141,52 @@ def test_ranger_verify():
     report = ranger_svc.verify_access("agt-1", "shell_exec", "shell_exec")
     assert "allowed" in report
     assert "violations" in ranger_svc.verify_agent_portfolio()
+
+
+def test_soc_bus_correlate_okta_and_exfil():
+    from app.services import soc_bus as soc_bus_svc
+
+    demo = soc_bus_svc.demo_impossible_travel_and_exfil(actor_user="j.smith")
+    assert demo["ok"] is True
+    assert demo["okta"]["action"] == "login.impossible_travel"
+    assert demo["case"] is not None
+    assert demo["case"]["playbook"] == "insider_ai_compromise"
+    assert len(demo["case"]["linkedEvents"]) >= 2
+
+    ran = soc_bus_svc.run_case_playbook(demo["case"]["caseId"])
+    assert ran["ok"] is True
+    assert ran["case"]["status"] == "contained"
+    assert any(a.get("step") == "sonar.contain" for a in ran["case"]["actions"])
+
+    dash = soc_bus_svc.dashboard()
+    assert dash["totalCases"] >= 1
+    assert dash["totalEvents"] >= 2
+    assert "okta" in dash["sources"] or "clearframe.sonar" in dash["sources"]
+
+
+def test_soc_webhook_ingest():
+    from app.services import soc_bus as soc_bus_svc
+
+    out = soc_bus_svc.ingest_event(
+        {
+            "source": "okta",
+            "severity": "high",
+            "actor": {"user": "a.lee", "ip": "1.2.3.4"},
+            "action": "login.impossible_travel",
+            "evidence": {"from": "Paris", "to": "Tokyo", "minutes": 55},
+        }
+    )
+    assert out["ok"] is True
+    assert out["event"]["source"] == "okta"
+    # Alone — no case yet
+    assert out.get("case") is None
+    # Add agent exfil for same user → case
+    second = soc_bus_svc.emit_from_sonar(
+        threat_type="data_exfiltration",
+        severity="critical",
+        message="exfil bulk customer data",
+        agent_name="bot-a",
+        actor_user="a.lee",
+    )
+    assert second["case"] is not None
+    assert "a.lee" in second["case"]["title"]

@@ -20,6 +20,7 @@ from app.services import trust as trust_svc
 from app.services import sessions as sessions_svc
 from app.services import aegis as aegis_svc
 from app.services import sonar as sonar_svc
+from app.services import soc_bus as soc_bus_svc
 from app.services import pipeline as pipeline_svc
 from app.services import vault as vault_svc
 from app.services import audit as audit_svc
@@ -951,6 +952,83 @@ class SonarContainIn(BaseModel):
 def sonar_contain(body: SonarContainIn, user: dict = Depends(get_current_user)) -> dict[str, Any]:
     require_permission(user, "agents:write")
     return sonar_svc.contain(body.agentId, body.action, body.reason)
+
+
+class SocIngestIn(BaseModel):
+    eventId: str | None = None
+    source: str = "webhook"
+    severity: str = "medium"
+    actor: dict[str, Any] = {}
+    asset: dict[str, Any] = {}
+    action: str = "unknown"
+    evidence: dict[str, Any] = {}
+    ts: Any = None
+
+
+@app.get("/api/soc/dashboard")
+def soc_dashboard() -> dict[str, Any]:
+    return soc_bus_svc.dashboard()
+
+
+@app.get("/api/soc/events")
+def soc_events(limit: int = 50) -> dict[str, Any]:
+    return {"events": soc_bus_svc.list_events(limit)}
+
+
+@app.get("/api/soc/cases")
+def soc_cases(limit: int = 30) -> dict[str, Any]:
+    return {"cases": soc_bus_svc.list_cases(limit)}
+
+
+@app.get("/api/soc/cases/{case_id}")
+def soc_case(case_id: str) -> dict[str, Any]:
+    case = soc_bus_svc.get_case(case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail="Case not found")
+    return case
+
+
+@app.post("/api/soc/ingest")
+def soc_ingest(body: SocIngestIn) -> dict[str, Any]:
+    return soc_bus_svc.ingest_event(body.model_dump(exclude_none=True))
+
+
+@app.post("/api/soc/webhooks/{source}")
+async def soc_webhook(source: str, request: Request) -> dict[str, Any]:
+    """Generic webhook ingest — body is normalized into a SocEvent."""
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+    if not isinstance(payload, dict):
+        payload = {"raw": payload}
+    payload.setdefault("source", source)
+    # Okta-ish convenience mapping
+    if source.lower() == "okta" and "action" not in payload:
+        event_type = (payload.get("eventType") or payload.get("type") or "").lower()
+        if "impossible" in event_type or payload.get("impossibleTravel"):
+            payload["action"] = "login.impossible_travel"
+        elif "login" in event_type:
+            payload["action"] = "login.success"
+        actor = payload.get("actor") or {}
+        if not actor and payload.get("user"):
+            payload["actor"] = {"user": payload["user"], "ip": payload.get("ip")}
+    return soc_bus_svc.ingest_event(payload)
+
+
+@app.post("/api/soc/cases/{case_id}/run")
+def soc_run_case(case_id: str, user: dict = Depends(get_current_user)) -> dict[str, Any]:
+    require_permission(user, "agents:write")
+    result = soc_bus_svc.run_case_playbook(case_id)
+    if not result.get("ok"):
+        raise HTTPException(status_code=404, detail=result.get("error") or "Case not found")
+    return result
+
+
+@app.post("/api/soc/demo/correlate")
+def soc_demo_correlate() -> dict[str, Any]:
+    """Tabletop: Okta impossible travel + Sonar exfil → correlated case."""
+    return soc_bus_svc.demo_impossible_travel_and_exfil()
 
 
 @app.post("/api/pipeline/run")
