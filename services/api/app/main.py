@@ -905,6 +905,18 @@ def sonar_playbooks() -> list[dict[str, Any]]:
     return sonar_svc.list_playbooks()
 
 
+class SonarInjectIn(BaseModel):
+    type: str | None = None
+    severity: str | None = None
+    description: str | None = None
+    agentName: str = ""
+
+
+@app.post("/api/sonar/inject")
+def sonar_inject(body: SonarInjectIn) -> dict[str, Any]:
+    return sonar_svc.inject_test_alert(body.type, body.severity, body.description, body.agentName)
+
+
 class SonarContainIn(BaseModel):
     agentId: str | None = None
     action: str = "suspend"

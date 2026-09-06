@@ -221,7 +221,45 @@ def contain(
     return result
 
 
+def inject_test_alert(
+    threat_type: str | None = None,
+    severity: str | None = None,
+    description: str | None = None,
+    agent_name: str = "",
+) -> dict[str, Any]:
+    """Inject a synthetic SOC alert (demo / tabletop exercise)."""
+    import random
+    templates = [
+        ("policy_violation", "high", "Attempted file access outside allowed scope"),
+        ("anomaly", "medium", "Unusual query pattern detected"),
+        ("credential_abuse", "critical", "API key used from unknown IP range"),
+        ("insider_threat", "low", "Off-hours activity pattern"),
+        ("drift", "medium", "ClearFrame: mild behavioural drift detected"),
+        ("prompt_injection", "critical", "Jailbreak attempt blocked at Sonar gate"),
+        ("data_exfiltration", "critical", "Suspicious bulk data fetch pattern"),
+    ]
+    if not threat_type or not severity:
+        threat_type, severity, description = random.choice(templates)
+    if not description:
+        description = next((t[2] for t in templates if t[0] == threat_type), "Injected SOC alert")
+    if not agent_name:
+        from app.services import agents as agents_svc
+        cur = agents_svc.get_current_agent()
+        agent_name = cur["name"] if cur else "unknown-agent"
+    event = record_event(agent_name, threat_type, severity, description)
+    return {
+        "ok": True,
+        "injected": True,
+        "event": event,
+        "score": threat_score(),
+        "message": f"Alert injected: {threat_type} [{severity}] — {description}",
+    }
+
+
 def soc_dashboard() -> dict[str, Any]:
+    from app.services import agents as agents_svc
+    from app.services import sessions as sessions_svc
+
     threats = list_threats(100)
     by_sev = {"critical": 0, "high": 0, "medium": 0, "low": 0}
     by_type: dict[str, int] = {}
@@ -229,15 +267,34 @@ def soc_dashboard() -> dict[str, Any]:
         by_sev[t["severity"]] = by_sev.get(t["severity"], 0) + 1
         by_type[t["type"]] = by_type.get(t["type"], 0) + 1
     open_critical = by_sev.get("critical", 0) + by_sev.get("high", 0)
+
+    agents = [a for a in agents_svc.list_agents() if a.get("status") != "revoked"]
+    active_agents = [a for a in agents if a.get("status") == "active"]
+    current = agents_svc.get_current_agent()
+    session = sessions_svc.get_session()
+
+    score = threat_score()
+    level = "critical" if score >= 80 else "high" if score >= 60 else "elevated" if score >= 40 else "normal"
+
     return {
         "product": "Sonar AI SOC",
-        "sellableWith": "ClearFrame (OSS) + Nexus Protocol (commercial SafePulse)",
-        "score": threat_score(),
+        "openSource": True,
+        "sellableWith": "ClearFrame (OSS) + Nexus Protocol (closed-source SafePulse)",
+        "score": score,
+        "threatLevel": level,
         "openCriticalHigh": open_critical,
         "bySeverity": by_sev,
         "byType": by_type,
-        "recent": threats[:15],
+        "totalEvents": len(threats),
+        "recent": threats[:20],
         "playbooks": PLAYBOOKS,
+        "agentsMonitored": len(agents),
+        "agentsActive": len(active_agents),
+        "currentAgent": {"agentId": current["agentId"], "name": current["name"], "status": current["status"]} if current else None,
+        "session": {
+            "status": (session or {}).get("status") or "idle",
+            "sessionId": (session or {}).get("sessionId"),
+        },
         "capabilities": [
             "prompt_injection_detection",
             "exfiltration_blocking",
@@ -247,5 +304,7 @@ def soc_dashboard() -> dict[str, Any]:
             "containment_hooks",
             "otel_export",
             "playbook_automation",
+            "live_threat_feed",
+            "tabletop_inject",
         ],
     }
