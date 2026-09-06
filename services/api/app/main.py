@@ -905,6 +905,30 @@ def sonar_playbooks() -> list[dict[str, Any]]:
     return sonar_svc.list_playbooks()
 
 
+@app.get("/api/sonar/catalog")
+def sonar_catalog() -> list[dict[str, Any]]:
+    return sonar_svc.threat_catalog()
+
+
+class SonarLiveScanIn(BaseModel):
+    threatId: str
+    agentName: str = ""
+
+
+@app.post("/api/sonar/live-scan")
+def sonar_live_scan(body: SonarLiveScanIn) -> dict[str, Any]:
+    agent = agents_svc.get_current_agent()
+    name = body.agentName or (agent["name"] if agent else "operator")
+    return sonar_svc.live_scan_threat(body.threatId, agent_name=name)
+
+
+@app.post("/api/sonar/scan-session")
+def sonar_scan_session() -> dict[str, Any]:
+    agent = agents_svc.get_current_agent()
+    name = agent["name"] if agent else "operator"
+    return sonar_svc.scan_active_session(agent_name=name)
+
+
 class SonarInjectIn(BaseModel):
     type: str | None = None
     severity: str | None = None
