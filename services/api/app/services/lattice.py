@@ -168,26 +168,50 @@ def _run_job(job_id: str) -> None:
         )
     try:
         job = get_job(job_id)
-        # Lightweight governed stub: record episodic Continuum + return plan shape
+        # Governed worker execution: Continuum memory + policy-gated tool plan + optional Sonar scan
         from app.services import memory as continuum
         from app.services import agents as agents_svc
+        from app.services import policy as policy_svc
+        from app.services import sonar as sonar_svc
 
         agent = agents_svc.get_agent(job.get("agentId") or "") or {"agentId": job.get("agentId"), "name": "unknown"}
+        goal = job.get("goal") or ""
         continuum.put(
             tenant_id=job.get("tenantId") or "default",
             agent_id=agent.get("agentId") or "unknown",
-            content=f"Lattice job {job_id}: {job.get('goal', '')[:200]}",
+            content=f"Lattice job {job_id}: {goal[:200]}",
             strategy="episodic",
             namespace="lattice",
             session_id=job_id,
             tags=["lattice", "scale"],
         )
+
+        # Policy gate sample tool implied by goal
+        tool = "web_search"
+        if any(tok in goal.lower() for tok in ("shell", "exec", "rm ", "drop")):
+            tool = "shell_exec"
+        elif any(tok in goal.lower() for tok in ("file", "read", "write")):
+            tool = "file_read"
+        decision = policy_svc.evaluate(
+            tool,
+            {"goal": goal[:120]},
+            {"agentId": agent.get("agentId"), "capabilities": agent.get("capabilities") or []},
+        )
+        sonar = sonar_svc.scan_prompt(goal[:240], agent_name=agent.get("name") or "lattice-worker")
+
         result = {
             "ok": True,
             "runtime": "lattice",
             "agentId": agent.get("agentId"),
-            "goal": job.get("goal"),
-            "message": "Job completed on Lattice worker pool",
+            "goal": goal,
+            "policy": decision,
+            "sonar": {
+                "type": sonar.get("type"),
+                "severity": sonar.get("severity"),
+                "blocked": sonar.get("blocked"),
+                "contained": bool((sonar.get("containment") or {}).get("ok")),
+            },
+            "message": "Job completed on Lattice worker pool with policy + Sonar gates",
         }
         with get_conn() as conn:
             conn.execute(

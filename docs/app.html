@@ -158,6 +158,17 @@ label{display:block;font-family:var(--mono);font-size:.58rem;letter-spacing:.12e
         <div id="health-card" class="empty">Ping the backend to load status.</div>
       </div>
     </div>
+    <div class="card" style="margin-top:1rem">
+      <div class="k">What each part does</div>
+      <div class="chunk answer"><div class="n">1</div><div><div class="what">Agents</div><div class="how">Define who the agent is, which model/provider it uses, and which tools it may call.</div></div></div>
+      <div class="chunk answer"><div class="n">2</div><div><div class="what">SafePulse</div><div class="how">Operator check (Nexus demo in this console). Must pass before Trust issues a cert.</div></div></div>
+      <div class="chunk answer"><div class="n">3</div><div><div class="what">Trust</div><div class="how">Issues a time-bound certificate listing allowed capabilities for the selected agent.</div></div></div>
+      <div class="chunk answer"><div class="n">4</div><div><div class="what">Sessions</div><div class="how">Runs a governed agent session and writes an audit trail of every tool step.</div></div></div>
+      <div class="chunk answer"><div class="n">5</div><div><div class="what">Aegis</div><div class="how">Human-in-the-loop queue: approve, block, or override risky tool calls.</div></div></div>
+      <div class="chunk blocked"><div class="n">6</div><div><div class="what">AI SOC (Sonar)</div><div class="how">Detects agent threats (injection, exfil, drift…), live-scans each type, auto-contains critical hits, and runs playbooks.</div></div></div>
+      <div class="chunk answer"><div class="n">7</div><div><div class="what">Policies / Mandate</div><div class="how">Upload policy docs or author Mandate rules that hard-gate tools.</div></div></div>
+      <div class="chunk answer"><div class="n">8</div><div><div class="what">Data / Continuum / Lattice</div><div class="how">Ask questions over governed data; store agent memory; scale jobs across a worker pool.</div></div></div>
+    </div>
   </section>
 
   <section class="view" id="v-agents">
@@ -240,7 +251,7 @@ label{display:block;font-family:var(--mono);font-size:.58rem;letter-spacing:.12e
   <section class="view" id="v-aegis">
     <div class="card" style="margin-bottom:1rem">
       <div class="k">Aegis HITL queue</div>
-      <p class="note">Approve or block tool calls. Pipeline and sessions populate this queue.</p>
+      <p class="note">Approve, block, or override tool calls. Pipeline and sessions populate this queue. Override records a high-severity Sonar event.</p>
       <div class="actions">
         <button class="btn btn-ink" onclick="runPipeline()">Seed via pipeline</button>
         <button class="btn" onclick="loadAegis()">Refresh</button>
@@ -254,7 +265,7 @@ label{display:block;font-family:var(--mono);font-size:.58rem;letter-spacing:.12e
       <div>
         <div class="k">Detection layer</div>
         <h2>Sonar — AI-Powered SOC</h2>
-        <p class="note" style="margin:0">Real-time threat detection across the agent ecosystem. Ingests ClearFrame audit events and behavioural signals. Live-scan every detector, scan the active session, inject tabletop alerts, and contain agents.</p>
+        <p class="note" style="margin:0">Agent-threat SOC: live-scan every detector, scan the active session, inject tabletop alerts, auto-contain on critical playbooks, and contain agents manually. Signature detection for AI agent abuse — not a network SIEM replacement.</p>
       </div>
       <div class="actions" style="margin:0">
         <button class="btn btn-ink" onclick="sonarScanSession()">Scan active session</button>
@@ -262,6 +273,11 @@ label{display:block;font-family:var(--mono);font-size:.58rem;letter-spacing:.12e
         <button class="btn" onclick="loadSonar()">Refresh threat feed</button>
         <button class="btn btn-red" onclick="sonarContain()">Contain agent</button>
       </div>
+    </div>
+
+    <div class="card" style="margin-bottom:1rem" id="soc-posture">
+      <div class="k">SOC posture</div>
+      <div id="soc-posture-body" class="empty">Loading…</div>
     </div>
 
     <div class="soc-kpis">
@@ -329,6 +345,8 @@ label{display:block;font-family:var(--mono);font-size:.58rem;letter-spacing:.12e
           <div class="k">Coverage &amp; controls</div>
           <div class="soc-cap" id="sonar-caps"></div>
           <div class="soc-cap" id="sonar-controls" style="margin-top:.5rem"></div>
+          <div class="k" style="margin-top:.85rem">Threat map</div>
+          <div id="sonar-coverage"><div class="empty">—</div></div>
         </div>
       </div>
     </div>
@@ -630,6 +648,7 @@ window.CF_DEMO = localStorage.getItem("clearframe_demo") === "1";
     }
     if (path === "/api/trust/issue") {
       const a = current(); if (!a) return { ok: false, message: "Select an agent first." };
+      if (!S.operator || !S.operator.verified) return { ok: false, message: "Operator not verified via SafePulse. Enroll and verify first." };
       S.cert = { certId: uid("cert"), agentId: a.agentId, trustLevel: body.trustLevel || "STANDARD", capabilities: a.capabilities, issuedAt: Date.now() / 1000, expiresAt: Date.now() / 1000 + (body.ttlHours || 24) * 3600, revoked: false, signature: "hmac-sha256:demo" };
       log("Certificate issued " + S.cert.certId + " (" + S.cert.trustLevel + ")"); save();
       return { ok: true, message: "Certificate issued", cert: S.cert };
@@ -640,46 +659,73 @@ window.CF_DEMO = localStorage.getItem("clearframe_demo") === "1";
     if (path === "/api/sessions/start") return startSession();
     if (path === "/api/sessions/audit") return S.audit;
     if (path === "/api/aegis/calls") return S.toolCalls;
-    if ((m = path.match(/^\/api\/aegis\/([^/]+)\/(approve|block)$/))) {
+    if ((m = path.match(/^\/api\/aegis\/([^/]+)\/(approve|block|override)$/))) {
       const c = S.toolCalls.find(x => x.id === m[1]);
-      if (c) { c.status = m[2] === "approve" ? "approved" : "blocked"; if (m[2] === "block") threat(current() ? current().name : "operator", "hitl_denied", "medium", "Operator blocked " + c.tool); log("Aegis " + m[2] + " " + c.tool + " (" + c.id + ")"); save(); }
-      return { status: m[2] === "approve" ? "approved" : "blocked" };
+      if (c) {
+        c.status = m[2] === "approve" ? "approved" : (m[2] === "override" ? "overridden" : "blocked");
+        if (m[2] === "block") threat(current() ? current().name : "operator", "hitl_denied", "medium", "Operator blocked " + c.tool);
+        if (m[2] === "override") threat(current() ? current().name : "operator", "policy_violation", "high", "Operator override on " + c.tool);
+        log("Aegis " + m[2] + " " + c.tool + " (" + c.id + ")"); save();
+      }
+      return { status: m[2] === "approve" ? "approved" : (m[2] === "override" ? "overridden" : "blocked") };
     }
     if (path === "/api/sonar/scan") {
       const text = (body.prompt || "").toLowerCase();
       let type = "ok", severity = "low", playbook = null, blocked = false;
       if (["ignore previous", "ignore all previous", "jailbreak", "system prompt"].some(t => text.includes(t))) {
         type = "prompt_injection"; severity = "critical"; blocked = true;
-        playbook = { id: "pb-contain-prompt", name: "Contain prompt injection", severity: "critical", steps: ["Block request", "Record threat event", "Queue Aegis review", "Optional: suspend agent"] };
+        playbook = { id: "pb-contain-prompt", name: "Contain prompt injection", severity: "critical", steps: ["Block request", "Record threat event", "Queue Aegis review", "Auto-suspend agent"], autoContain: true };
       } else if (["exfiltrat", "admin password", "dump secrets", "bulk customer"].some(t => text.includes(t))) {
         type = "data_exfiltration"; severity = "critical"; blocked = true;
-        playbook = { id: "pb-block-exfil", name: "Block data exfiltration", severity: "critical", steps: ["Deny tool execution", "Alert SOC", "Flag session for forensics"] };
+        playbook = { id: "pb-block-exfil", name: "Block data exfiltration", severity: "critical", steps: ["Deny tool execution", "Alert SOC", "Flag session for forensics", "Auto-suspend agent"], autoContain: true };
       } else if (["drop table", "rm -rf", "truncate"].some(t => text.includes(t))) {
         type = "destructive_command"; severity = "critical"; blocked = true;
-        playbook = { id: "pb-block-destructive", name: "Block destructive command", severity: "critical", steps: ["Deny execution", "Require human override", "Audit chain verify"] };
+        playbook = { id: "pb-block-destructive", name: "Block destructive command", severity: "critical", steps: ["Deny execution", "Require human override", "Audit chain verify", "Auto-suspend agent"], autoContain: true };
       } else if (["unknown ip", "sk-live-", "credential abuse"].some(t => text.includes(t))) {
         type = "credential_abuse"; severity = "critical"; blocked = true;
-        playbook = { id: "pb-rotate-creds", name: "Credential exposure response", severity: "high", steps: ["Redact from logs", "Recommend vault rotate", "Notify operator"] };
+        playbook = { id: "pb-rotate-creds", name: "Credential exposure response", severity: "high", steps: ["Redact from logs", "Recommend vault rotate", "Notify operator"], autoContain: false };
       } else if (["api_key", "api key", "secret_key", "bearer ", "sk-prod-"].some(t => text.includes(t))) {
         type = "credential_exposure"; severity = "high"; blocked = true;
-        playbook = { id: "pb-rotate-creds", name: "Credential exposure response", severity: "high", steps: ["Redact from logs", "Recommend vault rotate", "Notify operator"] };
+        playbook = { id: "pb-rotate-creds", name: "Credential exposure response", severity: "high", steps: ["Redact from logs", "Recommend vault rotate", "Notify operator"], autoContain: false };
       } else if (["outside allowed", "policy violation", "/etc/passwd"].some(t => text.includes(t))) {
         type = "policy_violation"; severity = "high"; blocked = true;
-        playbook = { id: "pb-policy-breach", name: "Policy breach response", severity: "high", steps: ["Enforce document policy card", "Block tool", "Notify compliance"] };
+        playbook = { id: "pb-policy-breach", name: "Policy breach response", severity: "high", steps: ["Enforce document policy card", "Block tool", "Notify compliance", "Auto-suspend agent"], autoContain: true };
       } else if (["insider", "off-hours activity"].some(t => text.includes(t))) {
         type = "insider_threat"; severity = "low";
-        playbook = { id: "pb-investigate", name: "Investigate anomaly", severity: "medium", steps: ["Enrich with session context", "Compare baseline behaviour", "Escalate if repeated"] };
+        playbook = { id: "pb-investigate", name: "Investigate anomaly", severity: "medium", steps: ["Enrich with session context", "Compare baseline behaviour", "Escalate if repeated"], autoContain: false };
       } else if (["behavioural drift", "mild behavioural drift", "goal manifest"].some(t => text.includes(t))) {
         type = "drift"; severity = "medium";
-        playbook = { id: "pb-drift", name: "Behavioural drift response", severity: "medium", steps: ["Compare goal manifest", "Flag session", "Optional: lower trust"] };
+        playbook = { id: "pb-drift", name: "Behavioural drift response", severity: "medium", steps: ["Compare goal manifest", "Flag session", "Optional: lower trust"], autoContain: false };
       } else if (["unusual", "off-hours", "anomaly"].some(t => text.includes(t))) {
         type = "anomaly"; severity = "medium";
-        playbook = { id: "pb-investigate", name: "Investigate anomaly", severity: "medium", steps: ["Enrich with session context", "Compare baseline behaviour", "Escalate if repeated"] };
+        playbook = { id: "pb-investigate", name: "Investigate anomaly", severity: "medium", steps: ["Enrich with session context", "Compare baseline behaviour", "Escalate if repeated"], autoContain: false };
       }
       const name = current() ? current().name : "operator";
       let event = null;
       if (type !== "ok") { event = { id: uid("evt"), timestamp: ts(), agent: name, type, severity, description: (body.prompt || "").slice(0, 240) }; S.threats.unshift(event); save(); }
-      return { type, severity, blocked, message: (body.prompt || "").slice(0, 240), score: threatScore(), playbook, event, soc: true };
+      const actions = [];
+      let containment = null;
+      if (playbook) {
+        actions.push({ step: "match_playbook", status: "done", detail: playbook.name });
+        actions.push({ step: "record_threat_event", status: event ? "done" : "skipped", detail: event ? event.id : "no event" });
+        if (playbook.autoContain && blocked) {
+          const a = current();
+          if (a) { a.status = "suspended"; threat(a.name, "containment", "critical", "Sonar auto-contain: " + type); save();
+            containment = { ok: true, action: "suspend", agentId: a.agentId, agentName: a.name, suspended: true };
+            actions.push({ step: "auto_contain", status: "done", detail: a.name });
+          } else {
+            actions.push({ step: "auto_contain", status: "failed", detail: "No agent" });
+            containment = { ok: false, error: "No agent to contain" };
+          }
+        } else if (playbook.autoContain) {
+          actions.push({ step: "auto_contain", status: "skipped", detail: "severity below auto threshold" });
+        } else {
+          actions.push({ step: "auto_contain", status: "manual", detail: "operator decision required" });
+        }
+        actions.push({ step: "notify_operator", status: "done", detail: "threat feed + pipeline log" });
+        log("Sonar playbook " + playbook.name + " · " + type);
+      }
+      return { type, severity, blocked, message: (body.prompt || "").slice(0, 240), score: threatScore(), playbook, event, containment, actions, soc: true };
     }
     if (path === "/api/sonar/inject" && method === "POST") {
       const templates = [
@@ -756,8 +802,15 @@ window.CF_DEMO = localStorage.getItem("clearframe_demo") === "1";
         agentsActive: agents.filter(a => a.status === "active").length,
         currentAgent: cur ? { agentId: cur.agentId, name: cur.name, status: cur.status } : null,
         session: S.lastSession || { status: "idle", sessionId: null },
-        controls: ["scan_active_session", "inject_test_alert", "refresh_threat_feed", "live_scan_per_threat", "contain_agent", "prompt_scan"],
-        capabilities: ["prompt_injection_detection", "exfiltration_blocking", "policy_breach_response", "credential_exposure", "behavioural_drift", "containment_hooks", "live_threat_feed", "tabletop_inject", "playbook_automation", "session_scan", "per_threat_live_scan"]
+        controls: ["scan_active_session", "inject_test_alert", "refresh_threat_feed", "live_scan_per_threat", "contain_agent", "prompt_scan", "auto_contain_on_critical"],
+        capabilities: ["prompt_injection_detection", "exfiltration_blocking", "policy_breach_response", "credential_exposure", "behavioural_drift", "containment_hooks", "live_threat_feed", "tabletop_inject", "playbook_automation", "session_scan", "per_threat_live_scan", "auto_contain"],
+        maturity: "governed-demo",
+        detectionMode: "signature",
+        detectionNote: "Regex/signature detectors for agent threats. Not a full SIEM/UEBA replacement.",
+        threatCoverage: DEMO_SONAR_CATALOG.map(t => {
+          const pb = DEMO_PLAYBOOKS.find(p => p.id === t.playbookId);
+          return { id: t.id, name: t.name, severity: t.severity, mapped: true, detector: "signature", playbookId: t.playbookId, liveScan: true, autoContain: !!(pb && pb.autoContain), events: byType[t.id] || 0 };
+        })
       };
     }
     if (path === "/api/sonar/contain" && method === "POST") {
@@ -1207,6 +1260,7 @@ window.CF_DEMO = localStorage.getItem("clearframe_demo") === "1";
         <div class="actions">
           <button class="btn btn-sm btn-ink" onclick="decide('${it.id}','approve')">Approve</button>
           <button class="btn btn-sm btn-red" onclick="decide('${it.id}','block')">Block</button>
+          <button class="btn btn-sm" onclick="decide('${it.id}','override')">Override</button>
         </div>
       </div></div>`).join("") : `<div class="empty">Queue empty. Run the pipeline or a session.</div>`;
     } catch (e) { $("aegis-queue").innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
@@ -1221,11 +1275,13 @@ window.CF_DEMO = localStorage.getItem("clearframe_demo") === "1";
       const d = await req("/api/sonar/scan", { method: "POST", body: JSON.stringify({ prompt: $("sonar-input").value }) });
       const sevClass = d.severity === "critical" || d.severity === "high" ? "blocked" : (d.severity === "medium" ? "hitl" : "answer");
       $("sonar-scan-card").innerHTML = `<div class="chunk ${sevClass}"><div class="n">${d.blocked ? "!" : "✓"}</div><div>
-        <div class="what">${esc(d.type)} <span class="pill ${d.blocked ? "red" : "on"}">${esc(d.severity)}</span>${d.blocked ? ' <span class="pill red">blocked</span>' : ""}</div>
+        <div class="what">${esc(d.type)} <span class="pill ${d.blocked ? "red" : "on"}">${esc(d.severity)}</span>${d.blocked ? ' <span class="pill red">blocked</span>' : ""}${(d.containment && d.containment.ok) ? ' <span class="pill red">auto-contained</span>' : ""}</div>
         <div class="how">${esc(d.message || "")}</div>
         ${d.playbook ? `<div class="why"><b>Playbook:</b> ${esc(d.playbook.name)} — ${(d.playbook.steps || []).map(esc).join(" → ")}</div>` : ""}
+        ${(d.actions || []).length ? `<div class="how">${d.actions.map(a => esc(a.step) + ":" + esc(a.status)).join(" · ")}</div>` : ""}
         <div class="how">Threat level now ${esc(d.score)}%</div>
       </div></div>`;
+      if (d.containment) loadAgents();
       loadSonar();
     } catch (e) { $("sonar-scan-card").innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   };
@@ -1350,6 +1406,22 @@ window.CF_DEMO = localStorage.getItem("clearframe_demo") === "1";
 
       $("sonar-caps").innerHTML = (soc.capabilities || []).map(c => `<span class="pill ink">${esc(c.replace(/_/g, " "))}</span>`).join("");
       $("sonar-controls").innerHTML = (soc.controls || []).map(c => `<span class="pill">${esc(c.replace(/_/g, " "))}</span>`).join("");
+      const posture = $("soc-posture-body");
+      if (posture) {
+        posture.innerHTML = `<div class="chunk answer"><div class="n">◉</div><div>
+          <div class="what">${esc(soc.product || "Sonar AI SOC")} <span class="pill">${esc(soc.maturity || "demo")}</span> <span class="pill ink">${esc(soc.detectionMode || "signature")}</span></div>
+          <div class="how">${esc(soc.detectionNote || "Signature detectors for agent threats.")}</div>
+          <div class="how">Critical playbooks auto-suspend the current agent. Manual contain still available.</div>
+        </div></div>`;
+      }
+      const cov = soc.threatCoverage || [];
+      $("sonar-coverage").innerHTML = cov.length ? cov.map(t => {
+        const pill = t.severity === "critical" || t.severity === "high" ? "red" : (t.severity === "medium" ? "amber" : "");
+        return `<div class="chunk ${t.autoContain ? "blocked" : "answer"}"><div class="n">▣</div><div>
+          <div class="what">${esc(t.name)} <span class="pill ${pill}">${esc(t.severity)}</span>${t.mapped ? ' <span class="pill on">mapped</span>' : ""}${t.autoContain ? ' <span class="pill red">auto</span>' : ""}</div>
+          <div class="how">${esc(t.detector)} · live-scan · ${esc(t.events || 0)} events · ${esc(t.playbookId || "")}</div>
+        </div></div>`;
+      }).join("") : `<div class="empty">No coverage map.</div>`;
     } catch (e) {
       $("sonar-feed").innerHTML = `<div class="empty">${esc(e.message)}</div>`;
     }

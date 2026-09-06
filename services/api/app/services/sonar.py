@@ -357,7 +357,7 @@ def record_drift(agent_name: str, session_id: str) -> None:
 
 
 def scan_prompt(prompt: str, agent_name: str = "operator") -> dict[str, Any]:
-    """Full AI SOC prompt / intent scan with playbook recommendation."""
+    """Full AI SOC prompt / intent scan with playbook recommendation + optional auto-contain."""
     text = prompt or ""
     lower = text.lower()
     matched_type, severity, playbook_id = "ok", "low", None
@@ -379,6 +379,43 @@ def scan_prompt(prompt: str, agent_name: str = "operator") -> dict[str, Any]:
         event = record_event(agent_name, matched_type, severity, text[:240])
 
     playbook = next((p for p in PLAYBOOKS if p["id"] == playbook_id), None)
+    containment = None
+    actions: list[dict[str, Any]] = []
+
+    if playbook:
+        actions.append({
+            "step": "match_playbook",
+            "status": "done",
+            "detail": playbook["name"],
+        })
+        actions.append({
+            "step": "record_threat_event",
+            "status": "done" if event else "skipped",
+            "detail": (event or {}).get("id") if event else "no event",
+        })
+        if playbook.get("autoContain") and blocked:
+            containment = contain(
+                action="suspend",
+                reason=f"Sonar auto-contain: {matched_type}",
+                actor="sonar-auto",
+            )
+            actions.append({
+                "step": "auto_contain",
+                "status": "done" if containment.get("ok") else "failed",
+                "detail": containment.get("agentName") or containment.get("error") or containment.get("action"),
+            })
+        elif playbook.get("autoContain"):
+            actions.append({"step": "auto_contain", "status": "skipped", "detail": "severity below auto threshold"})
+        else:
+            actions.append({"step": "auto_contain", "status": "manual", "detail": "operator decision required"})
+
+        # Operator notification (in-app audit trail — no external SIEM in OSS)
+        _log_pipeline(
+            "Sonar playbook",
+            f"{playbook['name']} · {matched_type} · contain={'yes' if containment and containment.get('ok') else 'no'}",
+        )
+        actions.append({"step": "notify_operator", "status": "done", "detail": "pipeline log + threat feed"})
+
     return {
         "type": matched_type,
         "severity": severity,
@@ -387,6 +424,8 @@ def scan_prompt(prompt: str, agent_name: str = "operator") -> dict[str, Any]:
         "score": threat_score(),
         "playbook": playbook,
         "event": event,
+        "containment": containment,
+        "actions": actions,
         "soc": True,
     }
 
@@ -485,6 +524,9 @@ def soc_dashboard() -> dict[str, Any]:
     return {
         "product": "Sonar AI SOC",
         "openSource": True,
+        "maturity": "governed-demo",
+        "detectionMode": "signature",
+        "detectionNote": "Regex/signature detectors for agent threats. Not a full SIEM/UEBA replacement.",
         "sellableWith": "ClearFrame (OSS) + Nexus Protocol (closed-source SafePulse)",
         "score": score,
         "threatLevel": level,
@@ -495,6 +537,20 @@ def soc_dashboard() -> dict[str, Any]:
         "recent": threats[:20],
         "playbooks": PLAYBOOKS,
         "catalog": THREAT_CATALOG,
+        "threatCoverage": [
+            {
+                "id": t["id"],
+                "name": t["name"],
+                "severity": t["severity"],
+                "mapped": True,
+                "detector": "signature",
+                "playbookId": t["playbookId"],
+                "liveScan": True,
+                "autoContain": next((p.get("autoContain") for p in PLAYBOOKS if p["id"] == t["playbookId"]), False),
+                "events": by_type.get(t["id"], 0),
+            }
+            for t in THREAT_CATALOG
+        ],
         "agentsMonitored": len(agents),
         "agentsActive": len(active_agents),
         "currentAgent": {"agentId": current["agentId"], "name": current["name"], "status": current["status"]} if current else None,
@@ -509,6 +565,7 @@ def soc_dashboard() -> dict[str, Any]:
             "live_scan_per_threat",
             "contain_agent",
             "prompt_scan",
+            "auto_contain_on_critical",
         ],
         "capabilities": [
             "prompt_injection_detection",
@@ -523,5 +580,6 @@ def soc_dashboard() -> dict[str, Any]:
             "tabletop_inject",
             "session_scan",
             "per_threat_live_scan",
+            "auto_contain",
         ],
     }

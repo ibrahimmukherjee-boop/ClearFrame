@@ -112,7 +112,9 @@ async def start_session() -> dict[str, Any]:
     _persist_session(session_id, agent["agentId"], started_at, audit_entries, runtime, trace)
     aegis_svc.enqueue_from_audit(session_id, audit_entries)
     ops_svc.register_session(session_id, goal, agent.get("capabilities", []))
-    sonar_svc.record_drift(agent["name"], session_id)
+    # Drift is recorded only when audit shows flagged/blocked behavioural signals — not on every start
+    if any((e.get("status") or "").lower() in {"flagged", "blocked", "human_review"} for e in audit_entries):
+        sonar_svc.record_drift(agent["name"], session_id)
     governance_svc.collect_evidence()
     _log_pipeline("Session started", f"{session_id} ({runtime})")
     return {
