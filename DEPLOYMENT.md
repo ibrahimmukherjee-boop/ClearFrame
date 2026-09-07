@@ -34,6 +34,7 @@ CLEARFRAME_LATTICE_MAX_WORKERS=32
 ### SOC / integration env vars (live playbooks)
 
 ```
+# Notify / ticketing / IdP
 SLACK_BOT_TOKEN=          # or SLACK_WEBHOOK_URL=
 SLACK_SOC_CHANNEL=#soc-tier1
 JIRA_BASE_URL=
@@ -43,6 +44,24 @@ JIRA_PROJECT_KEY=SOC
 OKTA_DOMAIN=
 OKTA_API_TOKEN=
 SOC_WEBHOOK_URL=
+PAGERDUTY_ROUTING_KEY=
+SPLUNK_HEC_URL=
+SPLUNK_HEC_TOKEN=
+
+# CrowdStrike Falcon (AI SOC EDR)
+FALCON_CLIENT_ID=
+FALCON_CLIENT_SECRET=
+FALCON_BASE_URL=https://api.crowdstrike.com
+
+# Microsoft Defender for Endpoint
+DEFENDER_TENANT_ID=
+DEFENDER_CLIENT_ID=
+DEFENDER_CLIENT_SECRET=
+
+# SentinelOne
+S1_BASE_URL=
+S1_API_TOKEN=
+
 CLEARFRAME_INTEGRATIONS_REQUIRE_LIVE=false   # true = fail if connectors missing
 ```
 
@@ -52,7 +71,13 @@ Inbound SOC webhooks (normalize → SocEvent → correlate):
 - `POST /api/soc/webhooks/crowdstrike` (Falcon DetectionSummary-style payloads)
 - `POST /api/soc/webhooks/defender` (Microsoft Defender)
 
-Without Slack/Jira/Okta secrets, playbooks still run: ClearFrame contain/revoke are real; Slack/Jira/Okta are clearly **simulated**.
+Outbound EDR response (live when Falcon/Defender/S1 secrets set):
+
+- `POST /api/connectors/crowdstrike/sync` — pull detections into the AI SOC bus
+- `POST /api/connectors/crowdstrike/isolate` — Falcon network contain
+- `POST /api/connectors/defender/isolate` — Defender isolate
+
+Without Slack/Jira/Okta/Falcon secrets, playbooks still run: ClearFrame contain/revoke are real; enterprise connectors are clearly **simulated**.
 
 ## Smoke & stress
 

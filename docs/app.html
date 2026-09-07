@@ -263,18 +263,24 @@ label{display:block;font-family:var(--mono);font-size:.58rem;letter-spacing:.12e
   <section class="view" id="v-sonar">
     <div class="soc-hero">
       <div>
-        <div class="k">ClearFrame OSS · Detection &amp; response</div>
-        <h2>Sonar — Enterprise AI SOC</h2>
-        <p class="note" style="margin:0"><b>Cases first.</b> Ingest enterprise events, correlate with agent threats, triage, and run playbooks (contain + Slack/Jira/Okta when configured). Nexus Protocol adds SafePulse + managed connectors.</p>
+        <div class="k">ClearFrame OSS · AI-only security operations</div>
+        <h2>Sonar — AI SOC</h2>
+        <p class="note" style="margin:0"><b>Not a SIEM.</b> Detect threats <em>by and against AI agents</em>, open cases, then fan out to CrowdStrike / Defender / Okta / Slack. Live when secrets are set; otherwise clearly simulated.</p>
       </div>
       <div class="actions" style="margin:0">
         <button class="btn btn-ink" onclick="socTabletop('impossible_travel_exfil')">Tabletop: travel+exfil</button>
         <button class="btn" onclick="socTabletop('edr_agent_exfil')">Tabletop: EDR+exfil</button>
         <button class="btn" onclick="socTabletop('jailbreak_autocontain')">Tabletop: jailbreak</button>
         <button class="btn" onclick="socTabletop('policy_hard_block')">Tabletop: policy block</button>
+        <button class="btn" onclick="csSync()">Sync CrowdStrike</button>
         <button class="btn" onclick="loadSocBus()">Refresh cases</button>
         <button class="btn btn-red" onclick="sonarContain()">Contain agent</button>
       </div>
+    </div>
+
+    <div class="card" style="margin-bottom:1rem" id="soc-model">
+      <div class="k">How the AI SOC works</div>
+      <div id="soc-model-body" class="empty">Loading…</div>
     </div>
 
     <div class="card" style="margin-bottom:1rem" id="soc-posture">
@@ -629,9 +635,12 @@ window.CF_DEMO = localStorage.getItem("clearframe_demo") === "1";
       actions: [
         { step: "sonar.contain", status: "pending", detail: "Suspend implicated agent" },
         { step: "trust.revoke_cert", status: "pending", detail: "Revoke trust certificate" },
+        { step: "crowdstrike.isolate", status: "pending", detail: "Falcon network contain host" },
+        { step: "defender.isolate", status: "pending", detail: "Defender isolate host" },
         { step: "okta.suspend_user", status: "pending", detail: "Suspend IdP user " + user },
         { step: "jira.create", status: "pending", detail: "Open SOC ticket" },
         { step: "slack.page", status: "pending", detail: "Page #soc-tier1" },
+        { step: "pagerduty.page", status: "pending", detail: "Page on-call" },
         { step: "webhook.fanout", status: "pending", detail: "Post to SOC webhook" }
       ],
       createdAt: Date.now() / 1000, updatedAt: Date.now() / 1000,
@@ -1140,7 +1149,7 @@ window.CF_DEMO = localStorage.getItem("clearframe_demo") === "1";
           if (S.cert) S.cert.revoked = true;
           return { ...a, status: "done", result: "certificate revoked" };
         }
-        if ((a.step || "").startsWith("slack") || (a.step || "").startsWith("jira") || (a.step || "").startsWith("okta") || (a.step || "").startsWith("webhook")) {
+        if ((a.step || "").startsWith("slack") || (a.step || "").startsWith("jira") || (a.step || "").startsWith("okta") || (a.step || "").startsWith("webhook") || (a.step || "").startsWith("crowdstrike") || (a.step || "").startsWith("defender") || (a.step || "").startsWith("pagerduty") || (a.step || "").startsWith("sentinelone")) {
           return { ...a, status: "done", result: "simulated — set env/Vault for live" };
         }
         return { ...a, status: "skipped", result: a.detail || "" };
@@ -1290,19 +1299,56 @@ window.CF_DEMO = localStorage.getItem("clearframe_demo") === "1";
     }
     if (path === "/api/integrations/status") {
       return {
-        product: "ClearFrame integrations", requireLive: false, liveCount: 0,
+        product: "ClearFrame AI SOC integrations", requireLive: false, liveCount: 0,
         connectors: [
-          { id: "slack", label: "Slack", configured: false, mode: "simulated" },
-          { id: "jira", label: "Jira", configured: false, mode: "simulated" },
-          { id: "okta", label: "Okta", configured: false, mode: "simulated" },
-          { id: "webhook", label: "Generic SOC webhook", configured: false, mode: "simulated" }
+          { id: "slack", label: "Slack", configured: false, mode: "simulated", category: "notify" },
+          { id: "jira", label: "Jira", configured: false, mode: "simulated", category: "notify" },
+          { id: "okta", label: "Okta", configured: false, mode: "simulated", category: "identity" },
+          { id: "webhook", label: "Generic SOC webhook", configured: false, mode: "simulated", category: "notify" },
+          { id: "crowdstrike", label: "CrowdStrike Falcon", configured: false, mode: "simulated", category: "edr", role: "EDR isolate + detection sync" },
+          { id: "defender", label: "Microsoft Defender", configured: false, mode: "simulated", category: "edr" },
+          { id: "sentinelone", label: "SentinelOne", configured: false, mode: "simulated", category: "edr" },
+          { id: "pagerduty", label: "PagerDuty", configured: false, mode: "simulated", category: "notify" },
+          { id: "splunk", label: "Splunk HEC", configured: false, mode: "simulated", category: "notify" }
         ],
         note: "Configure env/Vault secrets for live actions. Nexus Protocol adds managed connectors + SafePulse."
       };
     }
-    if (path === "/api/soc/dashboard") {
+    if (path === "/api/ai-soc/model") {
       return {
-        product: "ClearFrame Enterprise AI SOC", openSource: true,
+        product: "ClearFrame AI SOC",
+        positioning: "Best-in-class security operations for AI agents — not a general SIEM/UEBA.",
+        oneLiner: "Sonar watches the agent. The bus joins EDR/IdP. A case runs the playbook: kill the agent path, contain the host, alert humans.",
+        layers: [
+          { id: "1-detect", name: "Detect (Sonar)", does: "Scans prompts, tool calls, sessions for AI-specific threats." },
+          { id: "2-bus", name: "Correlate (SOC bus)", does: "Joins CrowdStrike/Okta signals to the same user/host/agent." },
+          { id: "3-case", name: "Case", does: "Opens when AI risk meets enterprise risk." },
+          { id: "4-respond", name: "Respond", does: "Suspend agent, revoke trust, isolate host, suspend IdP, ticket + page." },
+          { id: "5-export", name: "Export", does: "Optional fan-out to Slack/Jira/PagerDuty/Splunk." }
+        ],
+        not: ["Full network SIEM", "Generic UEBA", "Replacement for Falcon console"]
+      };
+    }
+    if (path === "/api/ai-soc/posture") {
+      const model = await window.demoApi("/api/ai-soc/model");
+      const integ = await window.demoApi("/api/integrations/status");
+      return { ...model, connectors: integ.connectors, liveCount: 0, threatScore: threatScore() };
+    }
+    if (path === "/api/connectors/crowdstrike/sync" && method === "POST") {
+      const edr = socIngest({
+        source: "crowdstrike", severity: "critical",
+        actor: { user: "svc-agent", ip: "10.4.2.88" },
+        asset: { type: "endpoint", hostname: "dev-agent-runner-03" },
+        action: "malware.beacon",
+        evidence: { vendor: "crowdstrike", fixture: true }
+      });
+      return { ok: true, live: false, simulated: true, pulled: 2, ingested: 1, cases: edr.case ? [edr.case] : [], events: [edr.event] };
+    }
+    if (path === "/api/soc/dashboard") {
+      const model = await window.demoApi("/api/ai-soc/model");
+      return {
+        product: "ClearFrame AI SOC", openSource: true, notASiem: true,
+        positioning: model.positioning, oneLiner: model.oneLiner, layers: model.layers,
         nexus: "Nexus Protocol adds SafePulse + managed connectors",
         openCases: S.socCases.filter(c => c.status === "open").length,
         totalCases: S.socCases.length,
@@ -1310,9 +1356,9 @@ window.CF_DEMO = localStorage.getItem("clearframe_demo") === "1";
         cases: S.socCases.slice(0, 20),
         recentEvents: S.socEvents.slice(0, 15),
         sources: [...new Set(S.socEvents.map(e => e.source))],
-        playbooks: ["insider_ai_compromise", "edr_agent_compromise", "pb-contain-prompt", "pb-policy-breach"],
+        playbooks: ["insider_ai_compromise", "edr_agent_compromise", "pb-contain-prompt", "pb-policy-breach", "pb-contain-tool"],
         tabletops: ["jailbreak_autocontain", "impossible_travel_exfil", "policy_hard_block", "edr_agent_exfil"],
-        ingest: ["POST /api/soc/ingest", "POST /api/soc/webhooks/{source}"],
+        ingest: ["POST /api/soc/ingest", "POST /api/soc/webhooks/{source}", "POST /api/connectors/crowdstrike/sync"],
         integrations: await window.demoApi("/api/integrations/status"),
         center: "cases",
         workflow: ["assign", "acknowledge", "investigate", "run_playbook", "close"]
@@ -1760,6 +1806,7 @@ window.CF_DEMO = localStorage.getItem("clearframe_demo") === "1";
   window.loadSocBus = async function () {
     try {
       const dash = await req("/api/soc/dashboard");
+      const model = await req("/api/ai-soc/model").catch(() => dash);
       const cases = dash.cases || [];
       const events = dash.recentEvents || [];
       if ($("soc-open-cases")) $("soc-open-cases").textContent = String(dash.openCases || 0);
@@ -1770,12 +1817,21 @@ window.CF_DEMO = localStorage.getItem("clearframe_demo") === "1";
           `<span class="pill ${c.configured ? "on" : ""}">${esc(c.label)} · ${esc(c.mode)}</span>`
         ).join("") + `<span class="pill ink">${esc((dash.nexus || "Nexus adds SafePulse").slice(0, 60))}</span>`;
       }
+      const modelBody = $("soc-model-body");
+      if (modelBody) {
+        const layers = model.layers || dash.layers || [];
+        modelBody.innerHTML = `<div class="chunk answer"><div class="n">◎</div><div>
+          <div class="what">${esc(model.oneLiner || dash.oneLiner || "Sonar watches the agent. The bus joins EDR/IdP. Playbooks contain.")}</div>
+          <div class="how">${esc(model.positioning || dash.positioning || "")}</div>
+          ${layers.map((l, i) => `<div class="how"><b>${i + 1}. ${esc(l.name)}</b> — ${esc(l.does)}</div>`).join("")}
+        </div></div>`;
+      }
       const posture = $("soc-posture-body");
       if (posture) {
         posture.innerHTML = `<div class="chunk answer"><div class="n">◉</div><div>
-          <div class="what">${esc(dash.product || "ClearFrame Enterprise AI SOC")} <span class="pill on">cases-first</span></div>
+          <div class="what">${esc(dash.product || "ClearFrame AI SOC")} <span class="pill on">AI-only</span>${dash.notASiem ? ' <span class="pill">not a SIEM</span>' : ""}</div>
           <div class="how">Tabletops: ${(dash.tabletops || []).map(esc).join(" · ") || "—"}</div>
-          <div class="how">Connectors live: ${esc((dash.integrations && dash.integrations.liveCount) || 0)} / ${integ.length || 4}. Set env/Vault secrets for Slack/Jira/Okta.</div>
+          <div class="how">Connectors live: ${esc((dash.integrations && dash.integrations.liveCount) || 0)} / ${integ.length || 0}. Set Falcon/Okta/Slack secrets for live response.</div>
         </div></div>`;
       }
       $("soc-cases").innerHTML = cases.length ? cases.map(c => {
@@ -1815,6 +1871,17 @@ window.CF_DEMO = localStorage.getItem("clearframe_demo") === "1";
   };
 
   window.socDemoCorrelate = async function () { return socTabletop("impossible_travel_exfil"); };
+
+  window.csSync = async function () {
+    try {
+      const d = await req("/api/connectors/crowdstrike/sync", { method: "POST", body: "{}" });
+      $("soc-case-out").innerHTML = `<div class="chunk hitl"><div class="n">CS</div><div>
+        <div class="what">CrowdStrike sync · pulled ${esc(d.pulled)} · ingested ${esc(d.ingested)} · ${d.live ? "live" : "simulated"}</div>
+        <div class="how">${esc(d.error || (d.cases && d.cases.length ? ("cases: " + d.cases.map(c => c.caseId).join(", ")) : "No new correlated cases yet — run EDR+exfil tabletop or wait for agent threat."))}</div>
+      </div></div>`;
+      loadSocBus(); loadSonar();
+    } catch (e) { $("soc-case-out").innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+  };
 
   window.socTriage = async function (caseId) {
     try {

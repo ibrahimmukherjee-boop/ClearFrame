@@ -1,4 +1,4 @@
-"""Enterprise integrations — Slack, Jira, Okta, generic webhooks.
+"""Enterprise integrations — Slack, Jira, Okta, webhooks + AI SOC EDR fan-out.
 
 When credentials are set (env or Vault), calls are real HTTP.
 When missing, returns simulated=True so demos stay green and production
@@ -11,6 +11,7 @@ from typing import Any
 
 import httpx
 
+from app.services import connectors as connectors_svc
 from app.services import vault as vault_svc
 
 
@@ -27,46 +28,59 @@ def _require_live() -> bool:
 
 
 def status() -> dict[str, Any]:
-    """Operator-facing connector health for ClearFrame vs Nexus pitch."""
+    """Operator-facing connector health for ClearFrame AI SOC."""
     slack = bool(_secret("SLACK_BOT_TOKEN") or _secret("SLACK_WEBHOOK_URL"))
     jira = bool(_secret("JIRA_BASE_URL") and _secret("JIRA_API_TOKEN") and _secret("JIRA_EMAIL"))
     okta = bool(_secret("OKTA_DOMAIN") and _secret("OKTA_API_TOKEN"))
     webhook = bool(_secret("SOC_WEBHOOK_URL") or _secret("CLEARFRAME_SOC_WEBHOOK_URL"))
+    edr = connectors_svc.connector_status()
+    core = [
+        {
+            "id": "slack",
+            "label": "Slack",
+            "configured": slack,
+            "mode": "live" if slack else "simulated",
+            "env": ["SLACK_BOT_TOKEN or SLACK_WEBHOOK_URL", "SLACK_SOC_CHANNEL"],
+            "category": "notify",
+        },
+        {
+            "id": "jira",
+            "label": "Jira",
+            "configured": jira,
+            "mode": "live" if jira else "simulated",
+            "env": ["JIRA_BASE_URL", "JIRA_EMAIL", "JIRA_API_TOKEN", "JIRA_PROJECT_KEY"],
+            "category": "notify",
+        },
+        {
+            "id": "okta",
+            "label": "Okta",
+            "configured": okta,
+            "mode": "live" if okta else "simulated",
+            "env": ["OKTA_DOMAIN", "OKTA_API_TOKEN"],
+            "category": "identity",
+        },
+        {
+            "id": "webhook",
+            "label": "Generic SOC webhook",
+            "configured": webhook,
+            "mode": "live" if webhook else "simulated",
+            "env": ["SOC_WEBHOOK_URL"],
+            "category": "notify",
+        },
+    ]
+    connectors = core + edr
+    live_count = sum(1 for c in connectors if c.get("configured"))
     return {
-        "product": "ClearFrame integrations",
+        "product": "ClearFrame AI SOC integrations",
         "requireLive": _require_live(),
-        "connectors": [
-            {
-                "id": "slack",
-                "label": "Slack",
-                "configured": slack,
-                "mode": "live" if slack else "simulated",
-                "env": ["SLACK_BOT_TOKEN or SLACK_WEBHOOK_URL", "SLACK_SOC_CHANNEL"],
-            },
-            {
-                "id": "jira",
-                "label": "Jira",
-                "configured": jira,
-                "mode": "live" if jira else "simulated",
-                "env": ["JIRA_BASE_URL", "JIRA_EMAIL", "JIRA_API_TOKEN", "JIRA_PROJECT_KEY"],
-            },
-            {
-                "id": "okta",
-                "label": "Okta",
-                "configured": okta,
-                "mode": "live" if okta else "simulated",
-                "env": ["OKTA_DOMAIN", "OKTA_API_TOKEN"],
-            },
-            {
-                "id": "webhook",
-                "label": "Generic SOC webhook",
-                "configured": webhook,
-                "mode": "live" if webhook else "simulated",
-                "env": ["SOC_WEBHOOK_URL"],
-            },
-        ],
-        "liveCount": sum(1 for c in [slack, jira, okta, webhook] if c),
-        "note": "Configure env/Vault secrets for live actions. Nexus Protocol adds managed connectors + SafePulse.",
+        "connectors": connectors,
+        "liveCount": live_count,
+        "categories": {
+            "edr": [c for c in connectors if c.get("category") == "edr"],
+            "identity": [c for c in connectors if c.get("category") == "identity"],
+            "notify": [c for c in connectors if c.get("category") == "notify"],
+        },
+        "note": "AI-only SOC: live when secrets set, else simulated. Nexus adds SafePulse + managed connectors.",
     }
 
 
@@ -173,7 +187,6 @@ def okta_suspend_user(login: str) -> dict[str, Any]:
         }
 
     try:
-        # Resolve user by login
         r = httpx.get(
             f"{domain}/api/v1/users/{login}",
             headers={"Authorization": f"SSWS {token}", "Accept": "application/json"},
@@ -212,20 +225,68 @@ def run_outbound_bundle(
     summary: str,
     severity: str,
     actor_user: str,
+    hostname: str = "",
+    device_id: str = "",
+    isolate_edr: bool = True,
 ) -> dict[str, Any]:
-    """Execute Slack + Jira + Okta + generic webhook for a case."""
-    text = f"[ClearFrame SOC] {severity.upper()} case {case_id}: {title}\n{summary}"
+    """Execute full AI SOC fan-out: notify + IdP + optional EDR isolate + SIEM export."""
+    text = f"[ClearFrame AI SOC] {severity.upper()} case {case_id}: {title}\n{summary}"
     slack = notify_slack(text)
-    jira = create_jira_issue(f"[SOC] {title}", f"{summary}\n\nCase: {case_id}\nActor: {actor_user}\nSeverity: {severity}", severity)
+    jira = create_jira_issue(
+        f"[AI-SOC] {title}",
+        f"{summary}\n\nCase: {case_id}\nActor: {actor_user}\nHost: {hostname or '—'}\nSeverity: {severity}",
+        severity,
+    )
     okta = okta_suspend_user(actor_user) if actor_user else {"ok": False, "error": "no actor"}
     hook = post_soc_webhook(
         {
-            "type": "clearframe.soc.case",
+            "type": "clearframe.ai_soc.case",
             "caseId": case_id,
             "title": title,
             "severity": severity,
             "actor": actor_user,
+            "hostname": hostname,
             "summary": summary,
         }
     )
-    return {"slack": slack, "jira": jira, "okta": okta, "webhook": hook}
+    pager = connectors_svc.page_pagerduty(
+        title=f"AI SOC {case_id}: {title}",
+        severity="critical" if severity == "critical" else "error",
+        details={"caseId": case_id, "actor": actor_user, "hostname": hostname},
+    )
+    splunk = connectors_svc.export_splunk(
+        {
+            "caseId": case_id,
+            "title": title,
+            "severity": severity,
+            "actor": actor_user,
+            "hostname": hostname,
+            "product": "clearframe-ai-soc",
+        }
+    )
+
+    crowdstrike = {"ok": False, "skipped": True}
+    defender = {"ok": False, "skipped": True}
+    sentinelone = {"ok": False, "skipped": True}
+    if isolate_edr:
+        crowdstrike = connectors_svc.crowdstrike_isolate_host(
+            device_id=device_id, hostname=hostname, reason=f"ClearFrame case {case_id}"
+        )
+        defender = connectors_svc.defender_isolate_host(
+            device_id=device_id, hostname=hostname, reason=f"ClearFrame case {case_id}"
+        )
+        sentinelone = connectors_svc.sentinelone_isolate_host(
+            hostname=hostname, reason=f"ClearFrame case {case_id}"
+        )
+
+    return {
+        "slack": slack,
+        "jira": jira,
+        "okta": okta,
+        "webhook": hook,
+        "pagerduty": pager,
+        "splunk": splunk,
+        "crowdstrike": crowdstrike,
+        "defender": defender,
+        "sentinelone": sentinelone,
+    }

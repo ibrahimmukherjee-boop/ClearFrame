@@ -105,7 +105,7 @@ def test_sonar_ai_soc():
     assert "threatCoverage" in dash and len(dash["threatCoverage"]) >= 8
     assert "live_scan_per_threat" in dash["controls"]
     assert "scan_active_session" in dash["controls"]
-    assert dash.get("detectionMode") == "signature"
+    assert dash.get("detectionMode") == "ai_agent_signatures"
 
     catalog = sonar_svc.threat_catalog()
     assert any(t["id"] == "prompt_injection" for t in catalog)
@@ -194,13 +194,31 @@ def test_soc_webhook_ingest():
 def test_integrations_status_and_tabletops():
     from app.services import integrations as integrations_svc
     from app.services import soc_bus as soc_bus_svc
+    from app.services import connectors as connectors_svc
+    from app.services import ai_soc as ai_soc_svc
 
     st = integrations_svc.status()
     assert "connectors" in st
-    assert len(st["connectors"]) >= 4
+    assert len(st["connectors"]) >= 8
+    assert any(c["id"] == "crowdstrike" for c in st["connectors"])
 
     slack = integrations_svc.notify_slack("ClearFrame SOC test")
     assert slack.get("ok") is True  # simulated in CI
+
+    sync = connectors_svc.crowdstrike_sync_to_soc(limit=5)
+    assert sync.get("ok") is True
+    assert sync.get("simulated") is True or sync.get("live") is True
+
+    iso = connectors_svc.crowdstrike_isolate_host(hostname="lap-finance-12", reason="test")
+    assert iso.get("ok") is True
+    assert iso.get("simulated") is True
+
+    model = ai_soc_svc.operating_model()
+    assert "Detect" in model["layers"][0]["name"]
+    bind = ai_soc_svc.bind_entity(
+        agent_name="support-bot", actor_user="e.chen", hostname="lap-finance-12", vendor="crowdstrike"
+    )
+    assert bind.get("hostname") == "lap-finance-12"
 
     for story in ("jailbreak_autocontain", "impossible_travel_exfil", "policy_hard_block", "edr_agent_exfil"):
         out = soc_bus_svc.tabletop(story)
@@ -213,11 +231,27 @@ def test_integrations_status_and_tabletops():
     case_id = demo["case"]["caseId"]
     ack = soc_bus_svc.update_case(case_id, status="acknowledged", assignee="analyst@erasys.co.uk")
     assert ack["case"]["status"] == "acknowledged"
+    ran = soc_bus_svc.run_case_playbook(case_id)
+    assert ran.get("ok") is True
+    assert "crowdstrike" in (ran.get("integrations") or {})
     closed = soc_bus_svc.update_case(case_id, status="closed")
     assert closed["case"]["status"] == "closed"
 
     dash = soc_bus_svc.dashboard()
     assert dash.get("center") == "cases"
+    assert dash.get("notASiem") is True
     assert "integrations" in dash
     assert len(dash.get("tabletops") or []) >= 4
     assert "acknowledge" in (dash.get("workflow") or [])
+    assert len(dash.get("layers") or []) >= 4
+
+
+def test_ai_threat_catalog_includes_mcp_and_model():
+    from app.services import sonar as sonar_svc
+
+    ids = {t["id"] for t in sonar_svc.threat_catalog()}
+    assert "tool_poisoning" in ids
+    assert "model_exfil" in ids
+    assert "agent_lateral" in ids
+    live = sonar_svc.live_scan_threat("tool_poisoning")
+    assert live.get("ok") and live["scan"]["type"] == "tool_poisoning"

@@ -43,7 +43,20 @@ def main() -> None:
 
     # 1) Integrations status
     st = integrations_svc.status()
-    must(len(st.get("connectors") or []) >= 4, "integrations status", st.get("liveCount"))
+    must(len(st.get("connectors") or []) >= 8, "integrations status", st.get("liveCount"))
+    must(any(c["id"] == "crowdstrike" for c in st["connectors"]), "crowdstrike connector listed")
+
+    # 1b) CrowdStrike sync + isolate (simulated without secrets)
+    from app.services import connectors as connectors_svc
+    from app.services import ai_soc as ai_soc_svc
+
+    sync = connectors_svc.crowdstrike_sync_to_soc(limit=5)
+    must(sync.get("ok") is True, "crowdstrike sync", sync.get("pulled"))
+    iso = connectors_svc.crowdstrike_isolate_host(hostname="lap-finance-12")
+    must(iso.get("ok") and iso.get("simulated"), "crowdstrike isolate simulated")
+    model = ai_soc_svc.operating_model()
+    must(len(model.get("layers") or []) >= 5, "ai soc model layers")
+    ai_soc_svc.bind_entity(agent_name="bic-smoke-bot", actor_user="edr.user", hostname="ws-22", vendor="crowdstrike")
 
     # 2) Sonar catalog live-scan each
     for entry in sonar_svc.threat_catalog():
@@ -94,6 +107,9 @@ def main() -> None:
     must(dash.get("center") == "cases" and dash.get("totalCases", 0) >= 1, "soc dashboard", dash.get("openCases"))
     must(len(dash.get("tabletops") or []) >= 4, "tabletops listed")
     must("acknowledge" in (dash.get("workflow") or []), "workflow listed")
+    must(dash.get("notASiem") is True, "positioned as AI SOC not SIEM")
+    must(len(dash.get("layers") or []) >= 4, "model layers on dashboard")
+    must("crowdstrike" in (ran.get("integrations") or {}), "playbook includes crowdstrike")
 
     elapsed = round(time.time() - t0, 3)
     print({"elapsed_sec": elapsed, "cases": dash.get("totalCases"), "events": dash.get("totalEvents"), "connectors": st.get("liveCount")})

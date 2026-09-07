@@ -35,6 +35,12 @@ def init_all(seed: bool = True) -> None:
     memory_svc.init_memory_db()
     lattice_svc.init_lattice_db()
     soc_bus_svc.init_soc_bus_db()
+    try:
+        from app.services import ai_soc as ai_soc_svc
+
+        ai_soc_svc.init_ai_soc_db()
+    except Exception:
+        pass
     migrations_svc.init_migrations_db()
     migrations_svc.run_pending()
     if seed:

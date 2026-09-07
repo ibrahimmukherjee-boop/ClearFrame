@@ -264,8 +264,17 @@ def _is_identity_anomaly(ev: dict[str, Any]) -> bool:
 def _is_agent_exfil(ev: dict[str, Any]) -> bool:
     action = (ev.get("action") or "").lower()
     source = (ev.get("source") or "").lower()
+    ai_actions = {
+        "data_exfiltration",
+        "prompt_injection",
+        "credential_abuse",
+        "tool_poisoning",
+        "agent_lateral",
+        "model_exfil",
+        "rag_poisoning",
+    }
     return "exfil" in action or (
-        source.startswith("clearframe") and action in {"data_exfiltration", "prompt_injection", "credential_abuse"}
+        source.startswith("clearframe") and action in ai_actions
     )
 
 
@@ -338,10 +347,13 @@ def correlate_event(event_id: str) -> dict[str, Any] | None:
     actions = [
         {"step": "sonar.contain", "status": "pending", "detail": "Suspend implicated agent"},
         {"step": "trust.revoke_cert", "status": "pending", "detail": "Revoke trust certificate"},
+        {"step": "crowdstrike.isolate", "status": "pending", "detail": "Falcon network contain host"},
+        {"step": "defender.isolate", "status": "pending", "detail": "Defender isolate host"},
         {"step": "okta.suspend_user", "status": "pending", "detail": f"Suspend IdP user {user}"},
         {"step": "jira.create", "status": "pending", "detail": "Open SOC ticket"},
         {"step": "slack.page", "status": "pending", "detail": "Page #soc-tier1"},
-        {"step": "webhook.fanout", "status": "pending", "detail": "Post to SOC webhook"},
+        {"step": "pagerduty.page", "status": "pending", "detail": "Page on-call"},
+        {"step": "webhook.fanout", "status": "pending", "detail": "Post to SOC webhook / Splunk"},
     ]
     now = time.time()
     with get_conn() as conn:
@@ -365,7 +377,7 @@ def correlate_event(event_id: str) -> dict[str, Any] | None:
 
 
 def run_case_playbook(case_id: str) -> dict[str, Any]:
-    """Execute playbook: ClearFrame contain/revoke + live/simulated enterprise integrations."""
+    """Execute playbook: ClearFrame contain/revoke + EDR/IdP/notify integrations."""
     from app.services import sonar as sonar_svc
     from app.services import trust as trust_svc
     from app.services import integrations as integrations_svc
@@ -375,15 +387,52 @@ def run_case_playbook(case_id: str) -> dict[str, Any]:
         return {"ok": False, "error": "Case not found"}
 
     actor = (case.get("actor") or {}).get("user") or ""
+    hostname = ""
+    device_id = ""
+    for eid in case.get("linkedEvents") or []:
+        ev = get_event(eid)
+        if not ev:
+            continue
+        asset = ev.get("asset") or {}
+        if asset.get("hostname") and not hostname:
+            hostname = asset.get("hostname") or ""
+        evidence = ev.get("evidence") or {}
+        if evidence.get("deviceId") and not device_id:
+            device_id = str(evidence.get("deviceId"))
+
+    # Prefer AI SOC entity bindings when present
+    try:
+        from app.services import ai_soc as ai_soc_svc
+
+        binds = ai_soc_svc.resolve_bindings(actor_user=actor, hostname=hostname)
+        if binds:
+            hostname = hostname or binds[0].get("hostname") or ""
+            device_id = device_id or binds[0].get("deviceId") or ""
+    except Exception:
+        pass
+
     outbound = integrations_svc.run_outbound_bundle(
         case_id=case_id,
         title=case.get("title") or "",
         summary=case.get("summary") or "",
         severity=case.get("severity") or "high",
         actor_user=actor,
+        hostname=hostname,
+        device_id=device_id,
+        isolate_edr=True,
     )
 
     actions = list(case.get("actions") or [])
+    # Ensure EDR steps exist on older cases
+    have = {a.get("step") for a in actions}
+    for step, detail in (
+        ("crowdstrike.isolate", "Falcon network contain host"),
+        ("defender.isolate", "Defender isolate host"),
+        ("pagerduty.page", "Page on-call"),
+    ):
+        if step not in have:
+            actions.append({"step": step, "status": "pending", "detail": detail})
+
     results: list[dict[str, Any]] = []
 
     for i, step in enumerate(actions):
@@ -403,6 +452,24 @@ def run_case_playbook(case_id: str) -> dict[str, Any]:
                 except Exception as exc:
                     status = "failed"
                     note = str(exc)[:200]
+            elif name.startswith("crowdstrike"):
+                out = outbound.get("crowdstrike") or {}
+                status = "done" if out.get("ok") else "failed"
+                note = out.get("deviceId") or out.get("error") or detail
+                if out.get("simulated"):
+                    note = f"{note} (simulated)"
+            elif name.startswith("defender"):
+                out = outbound.get("defender") or {}
+                status = "done" if out.get("ok") else "failed"
+                note = out.get("deviceId") or out.get("error") or detail
+                if out.get("simulated"):
+                    note = f"{note} (simulated)"
+            elif name.startswith("sentinelone") or name.startswith("s1"):
+                out = outbound.get("sentinelone") or {}
+                status = "done" if out.get("ok") else "failed"
+                note = out.get("agentId") or out.get("error") or detail
+                if out.get("simulated"):
+                    note = f"{note} (simulated)"
             elif name.startswith("slack"):
                 out = outbound.get("slack") or {}
                 status = "done" if out.get("ok") else "failed"
@@ -419,10 +486,17 @@ def run_case_playbook(case_id: str) -> dict[str, Any]:
                 note = out.get("user") or out.get("error") or detail
                 if out.get("simulated"):
                     note = f"{note} (simulated)"
-            elif name.startswith("webhook"):
-                out = outbound.get("webhook") or {}
+            elif name.startswith("pagerduty"):
+                out = outbound.get("pagerduty") or {}
                 status = "done" if out.get("ok") else "failed"
-                note = "live fan-out" if out.get("live") else ("simulated" if out.get("simulated") else out.get("error") or detail)
+                note = out.get("dedupKey") or out.get("error") or detail
+                if out.get("simulated"):
+                    note = f"{note} (simulated)"
+            elif name.startswith("webhook") or name.startswith("splunk"):
+                out = outbound.get("webhook") or {}
+                splunk = outbound.get("splunk") or {}
+                status = "done" if out.get("ok") or splunk.get("ok") else "failed"
+                note = "live fan-out" if out.get("live") or splunk.get("live") else ("simulated" if out.get("simulated") or splunk.get("simulated") else out.get("error") or detail)
             else:
                 status = "skipped"
                 note = "unknown step"
@@ -808,11 +882,15 @@ def tabletop(story: str) -> dict[str, Any]:
 
 def dashboard() -> dict[str, Any]:
     from app.services import integrations as integrations_svc
+    from app.services import ai_soc as ai_soc_svc
 
     cases = list_cases(30)
     events = list_events(40)
+    model = ai_soc_svc.operating_model()
     return {
-        "product": "ClearFrame Enterprise AI SOC",
+        "product": "ClearFrame AI SOC",
+        "positioning": model.get("positioning"),
+        "oneLiner": model.get("oneLiner"),
         "openSource": True,
         "nexus": "Nexus Protocol adds SafePulse + managed connectors",
         "openCases": len([c for c in cases if c.get("status") == "open"]),
@@ -821,10 +899,12 @@ def dashboard() -> dict[str, Any]:
         "cases": cases,
         "recentEvents": events[:20],
         "sources": sorted({e.get("source") for e in events if e.get("source")}),
-        "playbooks": ["insider_ai_compromise", "edr_agent_compromise", "pb-contain-prompt", "pb-policy-breach"],
+        "playbooks": ["insider_ai_compromise", "edr_agent_compromise", "pb-contain-prompt", "pb-policy-breach", "pb-contain-tool"],
         "tabletops": ["jailbreak_autocontain", "impossible_travel_exfil", "policy_hard_block", "edr_agent_exfil"],
-        "ingest": ["POST /api/soc/ingest", "POST /api/soc/webhooks/{source}"],
+        "ingest": ["POST /api/soc/ingest", "POST /api/soc/webhooks/{source}", "POST /api/connectors/crowdstrike/sync"],
         "integrations": integrations_svc.status(),
+        "layers": model.get("layers"),
         "center": "cases",
         "workflow": ["assign", "acknowledge", "investigate", "run_playbook", "close"],
+        "notASiem": True,
     }

@@ -1076,6 +1076,78 @@ def integrations_status() -> dict[str, Any]:
     return integrations_svc.status()
 
 
+@app.get("/api/ai-soc/model")
+def ai_soc_model() -> dict[str, Any]:
+    from app.services import ai_soc as ai_soc_svc
+
+    return ai_soc_svc.operating_model()
+
+
+@app.get("/api/ai-soc/posture")
+def ai_soc_posture() -> dict[str, Any]:
+    from app.services import ai_soc as ai_soc_svc
+
+    return ai_soc_svc.posture()
+
+
+class AiSocBindIn(BaseModel):
+    agentId: str = ""
+    agentName: str = ""
+    actorUser: str = ""
+    hostname: str = ""
+    deviceId: str = ""
+    vendor: str = ""
+
+
+@app.post("/api/ai-soc/bindings")
+def ai_soc_bind(body: AiSocBindIn, user: dict = Depends(get_current_user)) -> dict[str, Any]:
+    require_permission(user, "agents:write")
+    from app.services import ai_soc as ai_soc_svc
+
+    return ai_soc_svc.bind_entity(
+        agent_id=body.agentId,
+        agent_name=body.agentName,
+        actor_user=body.actorUser,
+        hostname=body.hostname,
+        device_id=body.deviceId,
+        vendor=body.vendor,
+    )
+
+
+@app.post("/api/connectors/crowdstrike/sync")
+def crowdstrike_sync(user: dict = Depends(get_current_user)) -> dict[str, Any]:
+    require_permission(user, "agents:write")
+    from app.services import connectors as connectors_svc
+
+    return connectors_svc.crowdstrike_sync_to_soc(limit=15)
+
+
+class IsolateIn(BaseModel):
+    hostname: str = ""
+    deviceId: str = ""
+    reason: str = "ClearFrame AI SOC"
+
+
+@app.post("/api/connectors/crowdstrike/isolate")
+def crowdstrike_isolate(body: IsolateIn, user: dict = Depends(get_current_user)) -> dict[str, Any]:
+    require_permission(user, "agents:write")
+    from app.services import connectors as connectors_svc
+
+    return connectors_svc.crowdstrike_isolate_host(
+        device_id=body.deviceId, hostname=body.hostname, reason=body.reason
+    )
+
+
+@app.post("/api/connectors/defender/isolate")
+def defender_isolate(body: IsolateIn, user: dict = Depends(get_current_user)) -> dict[str, Any]:
+    require_permission(user, "agents:write")
+    from app.services import connectors as connectors_svc
+
+    return connectors_svc.defender_isolate_host(
+        device_id=body.deviceId, hostname=body.hostname, reason=body.reason
+    )
+
+
 @app.post("/api/pipeline/run")
 async def run_pipeline() -> dict[str, Any]:
     return await pipeline_svc._run_full_pipeline_async()
