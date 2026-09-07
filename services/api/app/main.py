@@ -21,6 +21,7 @@ from app.services import sessions as sessions_svc
 from app.services import aegis as aegis_svc
 from app.services import sonar as sonar_svc
 from app.services import soc_bus as soc_bus_svc
+from app.services import integrations as integrations_svc
 from app.services import pipeline as pipeline_svc
 from app.services import vault as vault_svc
 from app.services import audit as audit_svc
@@ -1029,6 +1030,28 @@ def soc_run_case(case_id: str, user: dict = Depends(get_current_user)) -> dict[s
 def soc_demo_correlate() -> dict[str, Any]:
     """Tabletop: Okta impossible travel + Sonar exfil → correlated case."""
     return soc_bus_svc.demo_impossible_travel_and_exfil()
+
+
+@app.post("/api/soc/tabletop/{story}")
+def soc_tabletop(story: str) -> dict[str, Any]:
+    """Proof stories: jailbreak_autocontain | impossible_travel_exfil | policy_hard_block."""
+    result = soc_bus_svc.tabletop(story)
+    if not result.get("ok"):
+        raise HTTPException(status_code=400, detail=result.get("error") or "Unknown story")
+    return result
+
+
+@app.post("/api/soc/cases/{case_id}/triage")
+def soc_triage(case_id: str) -> dict[str, Any]:
+    result = soc_bus_svc.triage_case(case_id)
+    if not result.get("ok"):
+        raise HTTPException(status_code=404, detail=result.get("error") or "Case not found")
+    return result
+
+
+@app.get("/api/integrations/status")
+def integrations_status() -> dict[str, Any]:
+    return integrations_svc.status()
 
 
 @app.post("/api/pipeline/run")

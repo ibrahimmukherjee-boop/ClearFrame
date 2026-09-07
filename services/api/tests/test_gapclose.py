@@ -157,6 +157,7 @@ def test_soc_bus_correlate_okta_and_exfil():
     assert ran["ok"] is True
     assert ran["case"]["status"] == "contained"
     assert any(a.get("step") == "sonar.contain" for a in ran["case"]["actions"])
+    assert "integrations" in ran
 
     dash = soc_bus_svc.dashboard()
     assert dash["totalCases"] >= 1
@@ -178,9 +179,7 @@ def test_soc_webhook_ingest():
     )
     assert out["ok"] is True
     assert out["event"]["source"] == "okta"
-    # Alone — no case yet
     assert out.get("case") is None
-    # Add agent exfil for same user → case
     second = soc_bus_svc.emit_from_sonar(
         threat_type="data_exfiltration",
         severity="critical",
@@ -190,3 +189,26 @@ def test_soc_webhook_ingest():
     )
     assert second["case"] is not None
     assert "a.lee" in second["case"]["title"]
+
+
+def test_integrations_status_and_tabletops():
+    from app.services import integrations as integrations_svc
+    from app.services import soc_bus as soc_bus_svc
+
+    st = integrations_svc.status()
+    assert "connectors" in st
+    assert len(st["connectors"]) >= 4
+
+    slack = integrations_svc.notify_slack("ClearFrame SOC test")
+    assert slack.get("ok") is True  # simulated in CI
+
+    for story in ("jailbreak_autocontain", "impossible_travel_exfil", "policy_hard_block"):
+        out = soc_bus_svc.tabletop(story)
+        assert out.get("ok") is True, story
+        assert out.get("case") is not None, story
+        assert out["case"].get("triage") or soc_bus_svc.triage_case(out["case"]["caseId"]).get("ok")
+
+    dash = soc_bus_svc.dashboard()
+    assert dash.get("center") == "cases"
+    assert "integrations" in dash
+    assert len(dash.get("tabletops") or []) >= 3
