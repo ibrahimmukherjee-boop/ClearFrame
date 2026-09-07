@@ -31,6 +31,23 @@ CLEARFRAME_LATTICE_WORKERS=4
 CLEARFRAME_LATTICE_MAX_WORKERS=32
 ```
 
+### SOC / integration env vars (live playbooks)
+
+```
+SLACK_BOT_TOKEN=          # or SLACK_WEBHOOK_URL=
+SLACK_SOC_CHANNEL=#soc-tier1
+JIRA_BASE_URL=
+JIRA_EMAIL=
+JIRA_API_TOKEN=
+JIRA_PROJECT_KEY=SOC
+OKTA_DOMAIN=
+OKTA_API_TOKEN=
+SOC_WEBHOOK_URL=
+CLEARFRAME_INTEGRATIONS_REQUIRE_LIVE=false   # true = fail if connectors missing
+```
+
+Without these, playbooks still run: ClearFrame contain/revoke are real; Slack/Jira/Okta are clearly **simulated**.
+
 ## Smoke & stress
 
 ```bash
