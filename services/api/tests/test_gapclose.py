@@ -202,13 +202,22 @@ def test_integrations_status_and_tabletops():
     slack = integrations_svc.notify_slack("ClearFrame SOC test")
     assert slack.get("ok") is True  # simulated in CI
 
-    for story in ("jailbreak_autocontain", "impossible_travel_exfil", "policy_hard_block"):
+    for story in ("jailbreak_autocontain", "impossible_travel_exfil", "policy_hard_block", "edr_agent_exfil"):
         out = soc_bus_svc.tabletop(story)
         assert out.get("ok") is True, story
         assert out.get("case") is not None, story
         assert out["case"].get("triage") or soc_bus_svc.triage_case(out["case"]["caseId"]).get("ok")
 
+    demo = soc_bus_svc.demo_edr_and_exfil(actor_user="e.chen")
+    assert demo.get("case") is not None
+    case_id = demo["case"]["caseId"]
+    ack = soc_bus_svc.update_case(case_id, status="acknowledged", assignee="analyst@erasys.co.uk")
+    assert ack["case"]["status"] == "acknowledged"
+    closed = soc_bus_svc.update_case(case_id, status="closed")
+    assert closed["case"]["status"] == "closed"
+
     dash = soc_bus_svc.dashboard()
     assert dash.get("center") == "cases"
     assert "integrations" in dash
-    assert len(dash.get("tabletops") or []) >= 3
+    assert len(dash.get("tabletops") or []) >= 4
+    assert "acknowledge" in (dash.get("workflow") or [])

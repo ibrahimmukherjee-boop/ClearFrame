@@ -996,25 +996,47 @@ def soc_ingest(body: SocIngestIn) -> dict[str, Any]:
 
 @app.post("/api/soc/webhooks/{source}")
 async def soc_webhook(source: str, request: Request) -> dict[str, Any]:
-    """Generic webhook ingest — body is normalized into a SocEvent."""
+    """Generic webhook ingest — Okta / CrowdStrike / Defender normalized into SocEvent."""
     try:
         payload = await request.json()
     except Exception:
         payload = {}
     if not isinstance(payload, dict):
         payload = {"raw": payload}
-    payload.setdefault("source", source)
-    # Okta-ish convenience mapping
-    if source.lower() == "okta" and "action" not in payload:
-        event_type = (payload.get("eventType") or payload.get("type") or "").lower()
-        if "impossible" in event_type or payload.get("impossibleTravel"):
-            payload["action"] = "login.impossible_travel"
-        elif "login" in event_type:
-            payload["action"] = "login.success"
-        actor = payload.get("actor") or {}
-        if not actor and payload.get("user"):
-            payload["actor"] = {"user": payload["user"], "ip": payload.get("ip")}
-    return soc_bus_svc.ingest_event(payload)
+    return soc_bus_svc.ingest_vendor_webhook(source, payload)
+
+
+class SocCaseUpdateIn(BaseModel):
+    status: str | None = None
+    assignee: str | None = None
+    note: str = ""
+
+
+@app.patch("/api/soc/cases/{case_id}")
+def soc_update_case(case_id: str, body: SocCaseUpdateIn, user: dict = Depends(get_current_user)) -> dict[str, Any]:
+    require_permission(user, "agents:write")
+    result = soc_bus_svc.update_case(case_id, status=body.status, assignee=body.assignee, note=body.note)
+    if not result.get("ok"):
+        raise HTTPException(status_code=400, detail=result.get("error") or "Update failed")
+    return result
+
+
+@app.post("/api/soc/cases/{case_id}/acknowledge")
+def soc_ack_case(case_id: str, user: dict = Depends(get_current_user)) -> dict[str, Any]:
+    require_permission(user, "agents:write")
+    result = soc_bus_svc.update_case(case_id, status="acknowledged", assignee=user.get("email") or "operator", note="acknowledged")
+    if not result.get("ok"):
+        raise HTTPException(status_code=404, detail=result.get("error") or "Case not found")
+    return result
+
+
+@app.post("/api/soc/cases/{case_id}/close")
+def soc_close_case(case_id: str, user: dict = Depends(get_current_user)) -> dict[str, Any]:
+    require_permission(user, "agents:write")
+    result = soc_bus_svc.update_case(case_id, status="closed", note="closed by operator")
+    if not result.get("ok"):
+        raise HTTPException(status_code=404, detail=result.get("error") or "Case not found")
+    return result
 
 
 @app.post("/api/soc/cases/{case_id}/run")

@@ -46,14 +46,21 @@ SOC_WEBHOOK_URL=
 CLEARFRAME_INTEGRATIONS_REQUIRE_LIVE=false   # true = fail if connectors missing
 ```
 
-Without these, playbooks still run: ClearFrame contain/revoke are real; Slack/Jira/Okta are clearly **simulated**.
+Inbound SOC webhooks (normalize → SocEvent → correlate):
+
+- `POST /api/soc/webhooks/okta`
+- `POST /api/soc/webhooks/crowdstrike` (Falcon DetectionSummary-style payloads)
+- `POST /api/soc/webhooks/defender` (Microsoft Defender)
+
+Without Slack/Jira/Okta secrets, playbooks still run: ClearFrame contain/revoke are real; Slack/Jira/Okta are clearly **simulated**.
 
 ## Smoke & stress
 
 ```bash
 cd services/api
-python -m pytest -q --ignore=tests/test_stress.py
-python stress_test.py
+.venv/bin/python -m pytest -q --ignore=tests/test_stress.py
+.venv/bin/python bic_smoke_test.py
+.venv/bin/python stress_test.py
 ```
 
 See `docker-compose.yml`, `deploy/kubernetes/clearframe.yaml`, `render.yaml`.
