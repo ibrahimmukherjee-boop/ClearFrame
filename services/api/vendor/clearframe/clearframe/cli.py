@@ -8,7 +8,6 @@ Fix 1: Ops token is written to ~/.clearframe/ops-token (chmod 600).
 """
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
 
 import typer
@@ -19,10 +18,57 @@ from rich.table   import Table
 app     = typer.Typer(name="clearframe", help="ClearFrame — secure agentic AI runtime", no_args_is_help=True)
 console = Console()
 
+_AGENT_TEMPLATE = '''\
+"""Minimal ClearFrame agent — edit the goal and tools, then run: python agent.py"""
+import asyncio
+from clearframe import AgentSession, ClearFrameConfig
+from clearframe.core.manifest import GoalManifest, ToolPermission
 
-# ── start ─────────────────────────────────────────────────────────────────────
+
+async def main() -> None:
+    config = ClearFrameConfig()
+    manifest = GoalManifest(
+        goal="Search for the latest AI safety papers and summarise them",
+        permitted_tools=[
+            ToolPermission(tool_name="web_search", max_calls_per_session=5),
+        ],
+    )
+    async with AgentSession(config, manifest) as session:
+        result = await session.call_tool("web_search", query="AI safety 2026")
+        print(result)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+'''
+
+
+# ── init ──────────────────────────────────────────────────────────────────────
 
 @app.command()
+def init(
+    name: str = typer.Argument(..., help="New agent project directory name."),
+) -> None:
+    """Create a new ClearFrame agent project scaffold."""
+    root = Path(name)
+    if root.exists() and any(root.iterdir()):
+        console.print(f"[red]Directory '{name}' already exists and is not empty.[/red]")
+        raise typer.Exit(code=1)
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "agent.py").write_text(_AGENT_TEMPLATE)
+    (root / "requirements.txt").write_text("clearframe>=0.2.1\n")
+    (root / "README.md").write_text(
+        f"# {name}\n\n"
+        "```bash\npip install -r requirements.txt\npython agent.py\n```\n"
+    )
+    console.print(f"[bold green]✓ Created ClearFrame project[/bold green] → [cyan]{root.resolve()}[/cyan]")
+    console.print("  Next: [dim]cd {name} && pip install -r requirements.txt && python agent.py[/dim]".format(name=name))
+
+
+# ── start / ops-start ─────────────────────────────────────────────────────────
+
+@app.command()
+@app.command("ops-start", hidden=True)
 def start(
     host: str = typer.Option("127.0.0.1", help="Bind address. Do NOT change to 0.0.0.0 in production."),
     port: int = typer.Option(7477, help="Port for the AgentOps API."),
@@ -73,6 +119,39 @@ def audit_verify(
         for e in errors:
             console.print(f"  [red]•[/red] {e}")
         raise typer.Exit(code=1)
+
+
+# ── audit-tail ────────────────────────────────────────────────────────────────
+
+@app.command("audit-tail")
+def audit_tail(
+    lines: int = typer.Option(50, "--lines", "-n", help="Number of recent entries to show."),
+    log_path: Path = typer.Option(
+        Path("~/.clearframe/audit.log").expanduser(),
+        help="Path to the audit log file.",
+    ),
+) -> None:
+    """Show recent audit log entries."""
+    from clearframe.core.audit import AuditLog
+    from clearframe.core.config import AuditConfig
+
+    config = AuditConfig(log_path=log_path)
+    audit = AuditLog(config)
+    entries = audit.tail(lines) if hasattr(audit, "tail") else None
+    if entries is None:
+        # Fallback: raw file tail when AuditLog has no .tail helper
+        if not log_path.exists():
+            console.print("[yellow]No audit log found.[/yellow]")
+            return
+        raw_lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()
+        for line in raw_lines[-lines:]:
+            console.print(line)
+        return
+    if not entries:
+        console.print("[yellow]Audit log is empty.[/yellow]")
+        return
+    for entry in entries:
+        console.print(entry)
 
 
 # ── rtl-replay ────────────────────────────────────────────────────────────────

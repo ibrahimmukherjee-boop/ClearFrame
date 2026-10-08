@@ -1,0 +1,67 @@
+ClearFrame — Desktop Package Setup
+==================================
+Version: SDK 0.2.1 / API 2.1.0-enterprise
+License: Apache 2.0 (ClearFrame OSS)
+
+WHAT'S IN THIS ZIP
+------------------
+clearframe/          Python SDK (pip-installable package)
+services/api/        FastAPI control plane + vendored SDK
+docs/                Console UI (GitHub Pages)
+deploy/              Kubernetes manifests
+docker-compose.yml   Local API + Postgres
+DEPLOYMENT.md        Production env vars & connectors
+README.md            Product overview
+
+REQUIREMENTS
+------------
+- Python 3.11 or 3.12
+- pip
+- (Optional) Docker + Docker Compose for full stack
+- (Optional) Postgres 16 for production-shaped local run
+- (Optional) Ollama / OpenAI / Anthropic keys for live LLM calls
+
+QUICK START — SDK
+-----------------
+cd clearframe
+python3 -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -e ".[dev]"
+clearframe version          # → ClearFrame v0.2.1
+clearframe init my-agent
+pytest -q
+
+QUICK START — API + Console
+---------------------------
+# Option A: Docker
+docker compose up --build
+# API: http://localhost:8080/api/health
+
+# Option B: Local Python
+cd services/api
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env        # fill secrets for production
+CLEARFRAME_ENV=development CLEARFRAME_AUTH=true USE_OLLAMA=false \
+  USE_CLEARFRAME_OPS=false CLEARFRAME_API_PORT=18080 python run.py
+# Dev login: admin@erasys.local / admin
+# Open docs/index.html or the hosted demo:
+# https://ibrahimmukherjee-boop.github.io/ClearFrame/
+
+FIXES INCLUDED IN THIS PACKAGE
+------------------------------
+1. pyproject.toml was invalid (duplicate [project.optional-dependencies])
+   — package could not be installed; fixed.
+2. Version mismatch (__version__ 0.1.0 vs package 0.2.1) — synced to 0.2.1.
+3. builder/ was outside the wheel packages= list — moved under clearframe.builder.
+4. Vault unit test disagreed with Vault.get() (raises VaultError) — fixed.
+5. Missing CLI commands documented in README (init, audit-tail, ops-start alias)
+   — implemented; typer[all] extra warning removed (use typer>=0.12).
+6. Verified: SDK 47 tests pass; API 87 tests + governance smoke pass.
+
+OPTIONAL / NOT IN ZIP
+---------------------
+- TrustRegistry private repo: pip install clearframe[trust] (needs GitHub access)
+- Live SOC connectors (Slack, Jira, CrowdStrike, etc.): see DEPLOYMENT.md
+- Nexus Protocol SafePulse: closed-source; demo-only in the console
+

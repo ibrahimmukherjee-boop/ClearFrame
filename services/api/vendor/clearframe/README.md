@@ -158,9 +158,9 @@ clearframe audit-tail --lines 50
 Start the live control plane:
 
 ```bash
-clearframe ops-start
+clearframe start
 # AgentOps running at http://localhost:7477
-# Auth token: <printed once to console>
+# Auth token saved to ~/.clearframe/ops-token (never printed)
 ```
 
 ---
@@ -169,9 +169,11 @@ clearframe ops-start
 
 ```
 clearframe init <name>          Create a new agent project
+clearframe start                Start AgentOps control plane (alias: ops-start)
 clearframe audit-verify         Verify audit log HMAC chain integrity
 clearframe audit-tail           Show recent audit entries
-clearframe ops-start            Start AgentOps control plane
+clearframe rtl-replay <id>      Replay and verify a session reasoning trace
+clearframe vault set|list       Manage the encrypted credential vault
 clearframe version              Show version
 ```
 
